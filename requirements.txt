@@ -1,0 +1,4 @@
+pyfleascope
+pyqt6
+pyqtgraph
+numpy
