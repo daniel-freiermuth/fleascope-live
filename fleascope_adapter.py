@@ -35,7 +35,8 @@ class FleaScopeAdapter(IFleaScopeAdapter):
             capture_time = timedelta(seconds=scale)
             trigger = self.configWidget.getTrigger()
             data = probe.read( capture_time, trigger)
-            self.curve.setData(data.index, data['bnc'])
+            if data.size != 0:
+                self.curve.setData(data.index, data['bnc'])
     
     def pause(self):
         if not self.is_closing():
