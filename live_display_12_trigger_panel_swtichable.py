@@ -331,6 +331,7 @@ class AnalogTriggerPanel(QWidget):
         row2.setSpacing(0)
         row2.addWidget(analog_level)
         row2.addWidget(analog_falling)
+        analog_level_time.setChecked(True)
 
         layout.addLayout(row1)
         layout.addLayout(row2)
@@ -348,6 +349,43 @@ class DigitalTriggerPanel(QWidget):
         self.setContentsMargins(0,0,0,0)
         layout.setContentsMargins(0,0,0,0)
         layout.setSpacing(0)
+
+        trigger_mode_group = QButtonGroup(self)
+        trigger_mode_group.setExclusive(True)
+
+        analog_level_time = QToolButton()
+        analog_level_time.setText("↩️")
+
+        analog_rising = QToolButton()
+        analog_rising.setText("↗️")
+
+        analog_level = QToolButton()
+        analog_level.setText("➡️️")
+
+        analog_falling = QToolButton()
+        analog_falling.setText("↘️")
+
+        for btn in (analog_level_time, analog_rising, analog_level, analog_falling):
+            btn.setMinimumSize(GRID_SIZE, GRID_SIZE)
+            btn.setMaximumSize(GRID_SIZE, GRID_SIZE)
+            btn.setCheckable(True)
+            trigger_mode_group.addButton(btn)
+        
+        row1 = QHBoxLayout()
+        row1.setContentsMargins(0, 0, 0, 0)
+        row1.setSpacing(0)
+        row1.addWidget(analog_level_time)
+        row1.addWidget(analog_rising)
+
+        row2 = QHBoxLayout()
+        row2.setContentsMargins(0, 0, 0, 0)
+        row2.setSpacing(0)
+        row2.addWidget(analog_level)
+        row2.addWidget(analog_falling)
+        analog_level_time.setChecked(True)
+
+        layout.addLayout(row1)
+        layout.addLayout(row2)
 
         self.bit_grid = BitGrid()
 
@@ -369,6 +407,7 @@ class TriggerConfigWidget(QGroupBox):
         time_frame_dial = LogKnob("Capture", "s", -13, 1.5)
         time_frame_dial.setValue(0.1)
         delay_dial = QuadraticKnob("Delay", "s", 0, 1)
+        delay_dial.setValue(0.1)
         delay_dial.setValue(0)
 
         main_layout.addWidget(time_frame_dial, 2, 0, 2, 2)
