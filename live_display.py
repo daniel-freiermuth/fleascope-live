@@ -133,64 +133,7 @@ class LivePlotApp(QtWidgets.QWidget):
 
         self.setWindowTitle("FleaScope Live Plot")
         self.resize(1000, 700)
-
-        # === Main layout ===
-        layout = QtWidgets.QVBoxLayout(self)
-
-        # === Controls ===
-        controls = QtWidgets.QHBoxLayout()
-        layout.addLayout(controls)
-
-        # -- Slider
-        self.slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.slider_granularity = 10
-        self.slider.setRange(-13*self.slider_granularity, 1*self.slider_granularity)
-        self.slider.setValue(-55)
-        self.slider.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding,
-                                QtWidgets.QSizePolicy.Policy.Fixed)
-        self.slider.valueChanged.connect(self.update_slider_display)
-        self.slider_value_label = QtWidgets.QLabel("1.0")
-        controls.addWidget(QtWidgets.QLabel("Time Frame"))
-        controls.addWidget(self.slider_value_label)
-        controls.addWidget(self.slider, stretch=2)
-
-        self.update_slider_display(self.slider.value())
-
-        # -- Drop-down
-        self.dropdown = QtWidgets.QComboBox()
-        self.dropdown.addItems(["x1", "x10"])
-        self.dropdown.setSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed,
-                                    QtWidgets.QSizePolicy.Policy.Fixed)
-        controls.addWidget(QtWidgets.QLabel("Probe"))
-        controls.addWidget(self.dropdown)
-
-        # -- Checkboxes
-        self.check_a = QtWidgets.QCheckBox("Show A")
-        self.check_a.setChecked(True)
-        self.check_b = QtWidgets.QCheckBox("Show B")
-        self.check_b.setChecked(True)
-        controls.addWidget(self.check_a)
-        controls.addWidget(self.check_b)
-
-        # === Buttons Row ===
-        button_row = QtWidgets.QHBoxLayout()
-        layout.addLayout(button_row)
-
-        # -- Pause/Resume Button
-        self.pause_btn = QtWidgets.QPushButton("Pause")
-        self.pause_btn.setCheckable(True)
-        self.pause_btn.clicked.connect(self.toggle_pause)
-        button_row.addWidget(self.pause_btn)
-
-        # -- Save Button
-        self.save_btn = QtWidgets.QPushButton("Save Snapshot")
-        self.save_btn.clicked.connect(self.save_snapshot)
-        button_row.addWidget(self.save_btn)
-
-        # Make them expand properly
-        for btn in [self.pause_btn, self.save_btn]:
-            btn.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
-
+        layout = QtWidgets.QHBoxLayout(self)
 
         # === Plot Area ===
         self.plots = pg.GraphicsLayoutWidget()
