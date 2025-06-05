@@ -339,6 +339,26 @@ class WaveformSelector(QWidget):
 
         layout.addWidget(self.dial)
     
+class DigitalChannelSelectorWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        layout = QGridLayout()
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        size = int(GRID_SIZE * 2 / 3)
+
+        self.buttons = []
+        for i in range(9):
+            btn = QToolButton()
+            btn.setCheckable(True)
+            btn.setText(str(i))
+            btn.setFixedSize(size, size)
+            self.buttons.append(btn)
+            row, col = divmod(i, 3)
+            layout.addWidget(btn, row, col)
+
+        self.setLayout(layout)
 
 class AnalogTriggerPanel(QWidget):
     def __init__(self):
@@ -454,6 +474,42 @@ class TriggerConfigWidget(QGroupBox):
         led = QLabel("🔴")
         main_layout.addWidget(led, 0, 0, 1, 1)
 
+        rename_button = QToolButton()
+        rename_button.setText("R")
+        rename_button.setFixedSize(GRID_SIZE, GRID_SIZE)
+        main_layout.addWidget(rename_button, 1, 0)
+
+        transport_control = QStackedLayout()
+        controls_when_paused_l = QHBoxLayout()
+        controls_when_paused_l.setContentsMargins(0, 0, 0, 0)
+        controls_when_paused_l.setSpacing(0)
+        controls_when_paused_w = QWidget()
+        controls_when_paused_w.setLayout(controls_when_paused_l)
+
+        play_button = QToolButton()
+        play_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+        play_button.setToolTip("Continously sample")
+        play_button.setFixedSize(GRID_SIZE, GRID_SIZE)
+        controls_when_paused_l.addWidget(play_button)
+
+        step_button = QToolButton()
+        step_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSkipForward))
+        step_button.setToolTip("Capture one sample")
+        step_button.setFixedSize(GRID_SIZE, GRID_SIZE)
+        controls_when_paused_l.addWidget(step_button)
+
+        pause_button = QToolButton()
+        pause_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
+        pause_button.setToolTip("Pause sampling")
+        pause_button.setFixedSize(2*GRID_SIZE, GRID_SIZE)
+
+        transport_control.addWidget(controls_when_paused_w)
+        transport_control.addWidget(pause_button)
+
+        transport_control.setCurrentIndex(1)
+
+        main_layout.addLayout(transport_control, 0, 1, 1, 2)
+
         time_frame_dial = LogKnob("Capture", "s", -13, 1.5)
         time_frame_dial.setValue(0.1)
         delay_dial = QuadraticKnob("Delay", "s", 0, 1)
@@ -498,21 +554,78 @@ class TriggerConfigWidget(QGroupBox):
 
         main_layout.addWidget(WaveformSelector(), 0, 6, 4, 2)
 
-    def get_config(self):
-        if self.analog_btn.isChecked():
-            return {
-                "mode": "analog",
-                "threshold_mV": self.dial.value(),
-                "condition": self.analog_combo.currentText()
-            }
-        else:
-            return {
-                "mode": "digital",
-                "bitmask": self.bit_grid.get_bitmask(),
-                "condition": self.digital_combo.currentText()
-            }
+        main_layout.addWidget(DigitalChannelSelectorWidget(), 2, 8, 2, 2)
+
+        bnc_button = QToolButton()
+        bnc_button.setText("P")
+        bnc_button.setFixedSize(GRID_SIZE, GRID_SIZE)
+        bnc_button.setCheckable(True)
+        main_layout.addWidget(bnc_button, 3, 10)
+        bnc_button.setChecked(True)
+
+        x1_button = QToolButton()
+        x1_button.setText("x1")
+        x1_button.setFixedSize(GRID_SIZE, GRID_SIZE)
+        x1_button.setCheckable(True)
+        main_layout.addWidget(x1_button, 0, 8)
+
+        x10_button = QToolButton()
+        x10_button.setText("x10")
+        x10_button.setCheckable(True)
+        x10_button.setFixedSize(GRID_SIZE, GRID_SIZE)
+        main_layout.addWidget(x10_button, 1, 8)
+
+        buttongroup = QButtonGroup(self)
+        buttongroup.setExclusive(True)
+        buttongroup.addButton(x1_button)
+        buttongroup.addButton(x10_button)
+        x1_button.setChecked(True)
+
+        cal_0v = QToolButton()
+        cal_0v.setText("0V")
+        cal_0v.setFixedSize(GRID_SIZE, GRID_SIZE)
+        main_layout.addWidget(cal_0v, 0, 9)
+
+        cal_3v3 = QToolButton()
+        cal_3v3.setText("3.3")
+        cal_3v3.setFixedSize(GRID_SIZE, GRID_SIZE)
+        main_layout.addWidget(cal_3v3, 1, 9)
+
+        delete_button = QToolButton()
+        delete_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogDiscardButton))
+        delete_button.setToolTip("Remove device")
+        delete_button.setFixedSize(GRID_SIZE, GRID_SIZE)
+
+        main_layout.addWidget(delete_button, 0, 10)
+
+        main_layout.addWidget(ColorButton(), 1, 10)
+
+        save = QToolButton()
+        save.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton))
+        save.setToolTip("Save calibration")
+        save.setFixedSize(GRID_SIZE, GRID_SIZE)
+
+        main_layout.addWidget(save, 2, 10)
 
 
+class ColorButton(QToolButton):
+        # self.color_button = QtWidgets.QPushButton()
+    def __init__(self):
+        super().__init__()
+        self.setFixedSize(GRID_SIZE, GRID_SIZE)
+        self.setStyleSheet("background-color: yellow; border: 1px solid gray;")
+        self.setToolTip("Pick color")
+        self.clicked.connect(self.pick_color)
+
+    def pick_color(self):
+        color = QtWidgets.QColorDialog.getColor()
+        if color.isValid():
+            self.setStyleSheet(f"background-color: {color.name()}; border: 1px solid gray;")
+
+    def get_color(self):
+        return self.palette().button().color().name()
+
+        
 class DeviceConfigWidget(QtWidgets.QGroupBox):
     def __init__(self, device_name: str, on_delete: Callable[[], None], on_config_change: Callable[[], None]):
         super().__init__()
@@ -523,18 +636,6 @@ class DeviceConfigWidget(QtWidgets.QGroupBox):
         self.setLayout(layout)
 
         # 'X' icon button in the corner
-        self.delete_button = QToolButton()
-        self.delete_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_TitleBarCloseButton))
-        self.delete_button.setToolTip("Remove device")
-        self.delete_button.setStyleSheet("border: none;")
-        self.delete_button.clicked.connect(on_delete)
-
-        layout.addWidget(self.delete_button, 0, 2, alignment=QtCore.Qt.AlignmentFlag.AlignRight)
-
-        self.color_button = QtWidgets.QPushButton()
-        self.color_button.setFixedWidth(40)
-        self.color_button.setStyleSheet("background-color: yellow")
-        self.color_button.clicked.connect(self.pick_color)
 
         self.mode_dropdown = QtWidgets.QComboBox()
         self.mode_dropdown.addItems(["Sinus", "Random", "Flat"])
@@ -546,7 +647,6 @@ class DeviceConfigWidget(QtWidgets.QGroupBox):
         self.slider.valueChanged.connect(on_config_change)
 
         layout.addWidget(QtWidgets.QLabel("Color:"), 1, 0)
-        layout.addWidget(self.color_button, 0, 1)
         layout.addWidget(QtWidgets.QLabel("Mode:"), 2, 0)
         layout.addWidget(self.mode_dropdown, 2, 1)
         layout.addWidget(QtWidgets.QLabel("Noise:"), 3, 0)
@@ -556,14 +656,6 @@ class DeviceConfigWidget(QtWidgets.QGroupBox):
         trigger_widget = TriggerConfigWidget()
         sub_layout.addWidget(trigger_widget, 0, 4, 1, 3)
         layout.addLayout(sub_layout, 4, 0, 1, 2)
-
-    def pick_color(self):
-        color = QtWidgets.QColorDialog.getColor()
-        if color.isValid():
-            self.color_button.setStyleSheet(f"background-color: {color.name()}")
-
-    def get_color(self):
-        return self.color_button.palette().button().color().name()
 
     def get_mode(self):
         return self.mode_dropdown.currentText()
@@ -594,7 +686,7 @@ class LivePlotApp(QtWidgets.QWidget):
         self.sidebar_layout = QtWidgets.QVBoxLayout(self.sidebar_widget)
         self.sidebar_scroll.setWidget(self.sidebar_widget)
 
-        main_layout.addWidget(self.sidebar_scroll, stretch=1)
+        main_layout.addWidget(self.sidebar_scroll, stretch=2)
 
         # === Device name input + add button ===
         add_row = QtWidgets.QHBoxLayout()
