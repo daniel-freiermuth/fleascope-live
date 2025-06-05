@@ -288,6 +288,56 @@ class QuadraticKnob(LinearKnob):
         sqrt_value = math.sqrt(abs(value)) * (-1 if value < 0 else 1)
         return super()._value_to_step(sqrt_value)
 
+class WaveformSelector(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
+        self.setContentsMargins(0,0,0,0)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0,0,0,0)
+        layout.setSpacing(0)
+
+        trigger_mode_group = QButtonGroup(self)
+        trigger_mode_group.setExclusive(True)
+
+        sine_button = QToolButton()
+        sine_button.setText("Si")
+
+        square_button = QToolButton()
+        square_button.setText("Sq")
+
+        triangle_button = QToolButton()
+        triangle_button.setText("️T")
+
+        ekg_button = QToolButton()
+        ekg_button.setText("E")
+
+        for btn in (sine_button, square_button, triangle_button, ekg_button):
+            btn.setMinimumSize(GRID_SIZE, GRID_SIZE)
+            btn.setMaximumSize(GRID_SIZE, GRID_SIZE)
+            btn.setCheckable(True)
+            trigger_mode_group.addButton(btn)
+        
+        row1 = QHBoxLayout()
+        row1.setContentsMargins(0, 0, 0, 0)
+        row1.setSpacing(0)
+        row1.addWidget(sine_button)
+        row1.addWidget(square_button)
+
+        row2 = QHBoxLayout()
+        row2.setContentsMargins(0, 0, 0, 0)
+        row2.setSpacing(0)
+        row2.addWidget(triangle_button)
+        row2.addWidget(ekg_button)
+        sine_button.setChecked(True)
+
+        layout.addLayout(row1)
+        layout.addLayout(row2)
+
+        self.dial = LinearKnob("Frequency", "Hz", 0.1, 10000)
+        self.dial.setValue(10)
+
+        layout.addWidget(self.dial)
     
 
 class AnalogTriggerPanel(QWidget):
@@ -445,6 +495,8 @@ class TriggerConfigWidget(QGroupBox):
         # Button logic
         self.analog_btn.clicked.connect(lambda: self.value_stack.setCurrentIndex(0))
         self.digital_btn.clicked.connect(lambda: self.value_stack.setCurrentIndex(1))
+
+        main_layout.addWidget(WaveformSelector(), 0, 6, 4, 2)
 
     def get_config(self):
         if self.analog_btn.isChecked():
