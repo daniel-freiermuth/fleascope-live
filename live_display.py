@@ -16,6 +16,30 @@ InputType = TypedDict('InputType', {
     'trigger': AnalogTrigger | DigitalTrigger
 })
 
+class SidePanel(QtWidgets.QScrollArea):
+    # QScrollArea -> QWidget -> QVBoxLayout
+    def add_device(self):
+        pass
+
+    def __init__(self):
+        super().__init__()
+        self.setWidgetResizable(True)
+        widget = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(widget)
+        self.setWidget(widget)
+
+        # === Device name input + add button ===
+        add_row = QtWidgets.QHBoxLayout()
+        device_name_input = QtWidgets.QLineEdit()
+        device_name_input.setPlaceholderText("Device name")
+        add_device_button = QtWidgets.QPushButton("+ Add Device")
+        add_device_button.clicked.connect(self.add_device)
+        add_row.addWidget(device_name_input)
+        add_row.addWidget(add_device_button)
+
+        layout.addStretch()
+        layout.addLayout(add_row)
+
 class LivePlotApp(QtWidgets.QWidget):
     closing = False
     def shutdown(self):
@@ -147,6 +171,10 @@ class LivePlotApp(QtWidgets.QWidget):
         # === Plot Area ===
         self.plots = pg.GraphicsLayoutWidget()
         layout.addWidget(self.plots)
+
+
+        layout.addWidget(SidePanel())
+
 
         self.plot_list = []
         self.curves = []
