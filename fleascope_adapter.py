@@ -1,4 +1,5 @@
 from datetime import timedelta
+import logging
 import threading
 import time
 from typing import Literal
@@ -45,7 +46,8 @@ class FleaScopeAdapter(IFleaScopeAdapter):
         if not self.is_closing():
             self.state = "running"
 
-    def settings_changed(self):
+    def capture_settings_changed(self):
+        logging.debug("Capture settings changed, restarting data update thread")
         self.device.unblock()
     
     def getProbe(self) -> FleaProbe:

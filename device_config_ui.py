@@ -14,6 +14,9 @@ class IFleaScopeAdapter:
     @abstractmethod
     def getDevicename(self) -> str:
         return NotImplemented
+    @abstractmethod
+    def capture_settings_changed(self):
+        return NotImplemented
 
 class TriStateBitButton(QToolButton):
     STATES = [
@@ -57,7 +60,7 @@ class TriStateBitButton(QToolButton):
             raise ValueError("Invalid state index")
 
 class BitGrid(QWidget):
-    def __init__(self):
+    def __init__(self, onChange: Callable[[], None]):
         super().__init__()
         layout = QGridLayout()
         layout.setSpacing(0)
@@ -66,6 +69,7 @@ class BitGrid(QWidget):
         self.buttons: list[TriStateBitButton] = []
         for i in range(9):
             btn = TriStateBitButton(bit_index=i)
+            btn.clicked.connect(onChange)
             self.buttons.append(btn)
             row, col = divmod(i, 3)
             layout.addWidget(btn, row, col)
@@ -300,66 +304,7 @@ class TriggerPanel(QWidget):
         return NotImplemented
 
 class AnalogTriggerPanel(TriggerPanel):
-    def __init__(self):
-        super().__init__()
-
-        trigger_mode_group = QButtonGroup(self)
-        trigger_mode_group.setExclusive(True)
-
-        self.analog_level_time = QToolButton()
-        self.analog_level_time.setText("↩️")
-
-        self.analog_rising = QToolButton()
-        self.analog_rising.setText("↗️")
-
-        self.analog_level = QToolButton()
-        self.analog_level.setText("➡️️")
-
-        self.analog_falling = QToolButton()
-        self.analog_falling.setText("↘️")
-
-        for btn in (self.analog_level_time, self.analog_rising, self.analog_level, self.analog_falling):
-            btn.setMinimumSize(GRID_SIZE, GRID_SIZE)
-            btn.setMaximumSize(GRID_SIZE, GRID_SIZE)
-            btn.setCheckable(True)
-            trigger_mode_group.addButton(btn)
-        
-        row1 = QHBoxLayout()
-        row1.setContentsMargins(0, 0, 0, 0)
-        row1.setSpacing(0)
-        row1.addWidget(self.analog_level_time)
-        row1.addWidget(self.analog_rising)
-
-        row2 = QHBoxLayout()
-        row2.setContentsMargins(0, 0, 0, 0)
-        row2.setSpacing(0)
-        row2.addWidget(self.analog_level)
-        row2.addWidget(self.analog_falling)
-        self.analog_level_time.setChecked(True)
-
-        self.layout.addLayout(row1)
-        self.layout.addLayout(row2)
-
-        self.dial = LinearKnob("Level", "V", -66, 66)
-        self.dial.setValue(1)
-
-        self.layout.addWidget(self.dial)
-    
-    def getTrigger(self) -> AnalogTrigger:
-        level = self.dial.getValue()
-        if self.analog_level_time.isChecked():
-            return AnalogTrigger.start_capturing_when().auto(level)
-        elif self.analog_rising.isChecked():
-            return AnalogTrigger.start_capturing_when().rising_edge(level)
-        elif self.analog_level.isChecked():
-            return AnalogTrigger.start_capturing_when().level(level)
-        elif self.analog_falling.isChecked():
-            return AnalogTrigger.start_capturing_when().falling_edge(level)
-        else:
-            raise ValueError("No trigger mode selected")
-
-class DigitalTriggerPanel(TriggerPanel):
-    def __init__(self):
+    def __init__(self, onChange: Callable[[], None]):
         super().__init__()
 
         trigger_mode_group = QButtonGroup(self)
@@ -380,6 +325,7 @@ class DigitalTriggerPanel(TriggerPanel):
         for btn in (self.analog_level_time, self.analog_rising, self.analog_level, self.analog_falling):
             btn.setFixedSize(GRID_SIZE, GRID_SIZE)
             btn.setCheckable(True)
+            btn.clicked.connect(onChange)
             trigger_mode_group.addButton(btn)
         
         row1 = QHBoxLayout()
@@ -398,7 +344,68 @@ class DigitalTriggerPanel(TriggerPanel):
         self.layout.addLayout(row1)
         self.layout.addLayout(row2)
 
-        self.bit_grid = BitGrid()
+        self.dial = LinearKnob("Level", "V", -66, 66)
+        self.dial.setValue(1)
+        self.dial.onValueChanged(lambda f: onChange())
+
+        self.layout.addWidget(self.dial)
+    
+    def getTrigger(self) -> AnalogTrigger:
+        level = self.dial.getValue()
+        if self.analog_level_time.isChecked():
+            return AnalogTrigger.start_capturing_when().auto(level)
+        elif self.analog_rising.isChecked():
+            return AnalogTrigger.start_capturing_when().rising_edge(level)
+        elif self.analog_level.isChecked():
+            return AnalogTrigger.start_capturing_when().level(level)
+        elif self.analog_falling.isChecked():
+            return AnalogTrigger.start_capturing_when().falling_edge(level)
+        else:
+            raise ValueError("No trigger mode selected")
+
+class DigitalTriggerPanel(TriggerPanel):
+    def __init__(self, onChange: Callable[[], None]):
+        super().__init__()
+        self.onChange = onChange
+
+        trigger_mode_group = QButtonGroup(self)
+        trigger_mode_group.setExclusive(True)
+
+        self.analog_level_time = QToolButton()
+        self.analog_level_time.setText("↩️")
+
+        self.analog_rising = QToolButton()
+        self.analog_rising.setText("↗️")
+
+        self.analog_level = QToolButton()
+        self.analog_level.setText("➡️️")
+
+        self.analog_falling = QToolButton()
+        self.analog_falling.setText("↘️")
+
+        for btn in (self.analog_level_time, self.analog_rising, self.analog_level, self.analog_falling):
+            btn.setFixedSize(GRID_SIZE, GRID_SIZE)
+            btn.setCheckable(True)
+            btn.clicked.connect(self.onChange)
+            trigger_mode_group.addButton(btn)
+        
+        row1 = QHBoxLayout()
+        row1.setContentsMargins(0, 0, 0, 0)
+        row1.setSpacing(0)
+        row1.addWidget(self.analog_level_time)
+        row1.addWidget(self.analog_rising)
+
+        row2 = QHBoxLayout()
+        row2.setContentsMargins(0, 0, 0, 0)
+        row2.setSpacing(0)
+        row2.addWidget(self.analog_level)
+        row2.addWidget(self.analog_falling)
+        self.analog_level_time.setChecked(True)
+
+        self.layout.addLayout(row1)
+        self.layout.addLayout(row2)
+
+        self.bit_grid = BitGrid(self.onChange)
 
         self.layout.addWidget(self.bit_grid)
     
@@ -434,6 +441,9 @@ class DeviceConfigWidget(QGroupBox):
     def getTrigger(self) -> AnalogTrigger | DigitalTrigger:
         return self.value_stack.currentWidget().getTrigger()
     
+    def forwardCaptureSettingsChanged(self):
+        self.adapter.capture_settings_changed()
+
     def __init__(self):
         super().__init__()
         main_layout = QGridLayout(self)
@@ -482,9 +492,11 @@ class DeviceConfigWidget(QGroupBox):
 
         self.time_frame_dial = LogKnob("Capture", "s", -13, 1.5)
         self.time_frame_dial.setValue(0.1)
+        self.time_frame_dial.onValueChanged(lambda f: self.forwardCaptureSettingsChanged())
         delay_dial = QuadraticKnob("Delay", "s", 0, 1)
         delay_dial.setValue(0.1)
         delay_dial.setValue(0)
+        delay_dial.onValueChanged(lambda f: self.forwardCaptureSettingsChanged())
 
         main_layout.addWidget(self.time_frame_dial, 2, 0, 2, 2)
         main_layout.addWidget(delay_dial, 2, 2, 2, 2)
@@ -510,8 +522,8 @@ class DeviceConfigWidget(QGroupBox):
 
         # Stacked mode-specific layout
         self.value_stack = QStackedLayout()
-        self.value_stack.addWidget(AnalogTriggerPanel())
-        self.value_stack.addWidget(DigitalTriggerPanel())
+        self.value_stack.addWidget(AnalogTriggerPanel(self.forwardCaptureSettingsChanged))
+        self.value_stack.addWidget(DigitalTriggerPanel(self.forwardCaptureSettingsChanged))
         stack_container = QWidget()
         stack_container.setLayout(self.value_stack)
         stack_container.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
@@ -520,7 +532,9 @@ class DeviceConfigWidget(QGroupBox):
 
         # Button logic
         self.analog_btn.clicked.connect(lambda: self.value_stack.setCurrentIndex(0))
+        self.analog_btn.clicked.connect(self.forwardCaptureSettingsChanged)
         self.digital_btn.clicked.connect(lambda: self.value_stack.setCurrentIndex(1))
+        self.digital_btn.clicked.connect(self.forwardCaptureSettingsChanged)
 
         main_layout.addWidget(WaveformSelector(), 0, 6, 4, 2)
 
