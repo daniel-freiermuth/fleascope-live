@@ -14,15 +14,15 @@ from pyfleascope.trigger_config import BitState
 from pyfleascope.flea_scope import AnalogTrigger, DigitalTrigger, FleaScope, Waveform
 
 from toats import ToastManager
-from device_config_ui import DeviceConfigWidget
+from device_config_ui import DeviceConfigWidget, IFleaScopeAdapter
 
 InputType = TypedDict('InputType', {
     'device': FleaScope,
     'trigger': AnalogTrigger | DigitalTrigger
 })
 
-class FleaScopeAdapter:
-    def __init__(self, device: FleaScope, configWidget: QWidget):
+class FleaScopeAdapter(IFleaScopeAdapter):
+    def __init__(self, device: FleaScope, configWidget: DeviceConfigWidget):
         self.configWidget = configWidget
         self.device = device
 
@@ -43,8 +43,10 @@ class SidePanel(QtWidgets.QScrollArea):
         self.add_device_button.setEnabled(True)
         self.add_device_button.setChecked(False)
     
-    def add_device_config(self, adapter: FleaScopeAdapter):
-        self.layout.insertWidget(self.layout.count() - 2, DeviceConfigWidget())
+    def add_device_config(self):
+        widget = DeviceConfigWidget()
+        self.layout.insertWidget(self.layout.count() - 2, widget)
+        return widget
 
     def __init__(self, toast_manager: ToastManager, add_device: Callable[[FleaScope], None]):
         super().__init__()
@@ -101,6 +103,9 @@ class LivePlotApp(QtWidgets.QWidget):
         plot.showGrid(x=True, y=True)
         self.curves.append( plot.plot(pen='y'))
         self.plots.nextRow()
+        config_widget = self.side_panel.add_device_config()
+        adapter = FleaScopeAdapter(device, config_widget)
+        config_widget.set_adapter(adapter)
 
     def save_snapshot(self):
         filename = QtWidgets.QFileDialog.getSaveFileName(self, "Save Plot", "", "CSV Files (*.csv)")[0]
