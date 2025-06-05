@@ -1,3 +1,7 @@
+from datetime import timedelta
+import threading
+import time
+from typing import Literal
 from device_config_ui import DeviceConfigWidget, IFleaScopeAdapter
 from pyfleascope.flea_scope import FleaProbe, FleaScope
 from toats import ToastManager
@@ -9,15 +13,40 @@ class FleaScopeAdapter(IFleaScopeAdapter):
         self.device = device
         self.curve = curve
         self.toast_manager = toast_manager
+        self.state : Literal['running'] | Literal['closing'] | Literal['step'] | Literal['paused'] = "running"
+
+        self.t = threading.Thread(
+            target=self.update_data, daemon=True
+        )
+        self.t.start()
+    
+    def is_closing(self) -> bool:
+        return self.state == "closing"
+
+    def update_data(self):
+        while not self.is_closing():
+            if self.state == "paused":
+                time.sleep(0.3)
+                continue
+                
+            scale = self.configWidget.getTimeFrame()
+            probe = self.getProbe()
+            capture_time = timedelta(seconds=scale)
+            trigger = self.configWidget.getTrigger()
+            data = probe.read( capture_time, trigger)
+            self.curve.setData(data.index, data['bnc'])
     
     def pause(self):
-        pass
+        if not self.is_closing():
+            self.state = "paused"
+            self.device.unblock()
 
     def start(self):
-        pass
+        if not self.is_closing():
+            self.state = "running"
 
     def settings_changed(self):
-        pass
+        self.device.unblock()
     
     def getProbe(self) -> FleaProbe:
         if self.configWidget.getProble() == "x1":
@@ -35,3 +64,8 @@ class FleaScopeAdapter(IFleaScopeAdapter):
     
     def getDevicename(self) -> str:
         return self.device.hostname
+    
+    def shutdown(self):
+        self.state = "closing"
+        self.device.unblock()
+        self.t.join()

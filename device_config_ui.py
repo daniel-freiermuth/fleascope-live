@@ -6,6 +6,8 @@ from PyQt6 import QtWidgets
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QButtonGroup, QDial, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QStackedLayout, QStyle, QToolButton, QVBoxLayout, QWidget
 
+from pyfleascope.trigger_config import AnalogTrigger, BitState, BitTriggerBuilder, DigitalTrigger
+
 GRID_SIZE = 30
 
 class IFleaScopeAdapter:
@@ -43,10 +45,16 @@ class TriStateBitButton(QToolButton):
                 border: 1px solid gray;
             }}
         """)
-
-    def get_state(self):
-        return ["dontcare", "0", "1"][self.state_index]
-
+    
+    def configureBit(self, builder: BitTriggerBuilder):
+        if self.state_index == 0:
+            return builder.set_bit(self.bit_index, BitState.DONT_CARE)
+        elif self.state_index == 1:
+            return builder.set_bit(self.bit_index, BitState.LOW)
+        elif self.state_index == 2:
+            return builder.set_bit(self.bit_index, BitState.HIGH)
+        else:
+            raise ValueError("Invalid state index")
 
 class BitGrid(QWidget):
     def __init__(self):
@@ -63,9 +71,12 @@ class BitGrid(QWidget):
             layout.addWidget(btn, row, col)
 
         self.setLayout(layout)
-
-    def get_bitmask(self):
-        return [btn.get_state() for btn in self.buttons]
+    
+    def getTriggerBuilder(self) -> BitTriggerBuilder:
+        builder = DigitalTrigger.start_capturing_when()
+        for btn in self.buttons:
+            builder = btn.configureBit(builder)
+        return builder
 
 def pretty_prefix(x: float):
     """Give the number an appropriate SI prefix.
@@ -146,6 +157,9 @@ class Knob(QWidget):
             v = self._step_to_value(value)
             slot(v)
         self._dial.valueChanged.connect(f)
+    
+    def getValue(self) -> float:
+        return self._step_to_value(self._dial.value())
 
     @abstractmethod
     def _step_to_value(self, step: int) -> float:
@@ -272,31 +286,39 @@ class DigitalChannelSelectorWidget(QWidget):
 
         self.setLayout(layout)
 
-class AnalogTriggerPanel(QWidget):
+class TriggerPanel(QWidget):
     def __init__(self):
         super().__init__()
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
         self.setContentsMargins(0,0,0,0)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0,0,0,0)
-        layout.setSpacing(0)
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(0,0,0,0)
+        self.layout.setSpacing(0)
+    
+    @abstractmethod
+    def getTrigger(self) -> AnalogTrigger | DigitalTrigger:
+        return NotImplemented
+
+class AnalogTriggerPanel(TriggerPanel):
+    def __init__(self):
+        super().__init__()
 
         trigger_mode_group = QButtonGroup(self)
         trigger_mode_group.setExclusive(True)
 
-        analog_level_time = QToolButton()
-        analog_level_time.setText("↩️")
+        self.analog_level_time = QToolButton()
+        self.analog_level_time.setText("↩️")
 
-        analog_rising = QToolButton()
-        analog_rising.setText("↗️")
+        self.analog_rising = QToolButton()
+        self.analog_rising.setText("↗️")
 
-        analog_level = QToolButton()
-        analog_level.setText("➡️️")
+        self.analog_level = QToolButton()
+        self.analog_level.setText("➡️️")
 
-        analog_falling = QToolButton()
-        analog_falling.setText("↘️")
+        self.analog_falling = QToolButton()
+        self.analog_falling.setText("↘️")
 
-        for btn in (analog_level_time, analog_rising, analog_level, analog_falling):
+        for btn in (self.analog_level_time, self.analog_rising, self.analog_level, self.analog_falling):
             btn.setMinimumSize(GRID_SIZE, GRID_SIZE)
             btn.setMaximumSize(GRID_SIZE, GRID_SIZE)
             btn.setCheckable(True)
@@ -305,80 +327,113 @@ class AnalogTriggerPanel(QWidget):
         row1 = QHBoxLayout()
         row1.setContentsMargins(0, 0, 0, 0)
         row1.setSpacing(0)
-        row1.addWidget(analog_level_time)
-        row1.addWidget(analog_rising)
+        row1.addWidget(self.analog_level_time)
+        row1.addWidget(self.analog_rising)
 
         row2 = QHBoxLayout()
         row2.setContentsMargins(0, 0, 0, 0)
         row2.setSpacing(0)
-        row2.addWidget(analog_level)
-        row2.addWidget(analog_falling)
-        analog_level_time.setChecked(True)
+        row2.addWidget(self.analog_level)
+        row2.addWidget(self.analog_falling)
+        self.analog_level_time.setChecked(True)
 
-        layout.addLayout(row1)
-        layout.addLayout(row2)
+        self.layout.addLayout(row1)
+        self.layout.addLayout(row2)
 
         self.dial = LinearKnob("Level", "V", -66, 66)
-        self.dial.setValue(10)
+        self.dial.setValue(1)
 
-        layout.addWidget(self.dial)
+        self.layout.addWidget(self.dial)
+    
+    def getTrigger(self) -> AnalogTrigger:
+        level = self.dial.getValue()
+        if self.analog_level_time.isChecked():
+            return AnalogTrigger.start_capturing_when().auto(level)
+        elif self.analog_rising.isChecked():
+            return AnalogTrigger.start_capturing_when().rising_edge(level)
+        elif self.analog_level.isChecked():
+            return AnalogTrigger.start_capturing_when().level(level)
+        elif self.analog_falling.isChecked():
+            return AnalogTrigger.start_capturing_when().falling_edge(level)
+        else:
+            raise ValueError("No trigger mode selected")
 
-class DigitalTriggerPanel(QWidget):
+class DigitalTriggerPanel(TriggerPanel):
     def __init__(self):
         super().__init__()
-        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
-        layout = QVBoxLayout()
-        self.setContentsMargins(0,0,0,0)
-        layout.setContentsMargins(0,0,0,0)
-        layout.setSpacing(0)
 
         trigger_mode_group = QButtonGroup(self)
         trigger_mode_group.setExclusive(True)
 
-        analog_level_time = QToolButton()
-        analog_level_time.setText("↩️")
+        self.analog_level_time = QToolButton()
+        self.analog_level_time.setText("↩️")
 
-        analog_rising = QToolButton()
-        analog_rising.setText("↗️")
+        self.analog_rising = QToolButton()
+        self.analog_rising.setText("↗️")
 
-        analog_level = QToolButton()
-        analog_level.setText("➡️️")
+        self.analog_level = QToolButton()
+        self.analog_level.setText("➡️️")
 
-        analog_falling = QToolButton()
-        analog_falling.setText("↘️")
+        self.analog_falling = QToolButton()
+        self.analog_falling.setText("↘️")
 
-        for btn in (analog_level_time, analog_rising, analog_level, analog_falling):
-            btn.setMinimumSize(GRID_SIZE, GRID_SIZE)
-            btn.setMaximumSize(GRID_SIZE, GRID_SIZE)
+        for btn in (self.analog_level_time, self.analog_rising, self.analog_level, self.analog_falling):
+            btn.setFixedSize(GRID_SIZE, GRID_SIZE)
             btn.setCheckable(True)
             trigger_mode_group.addButton(btn)
         
         row1 = QHBoxLayout()
         row1.setContentsMargins(0, 0, 0, 0)
         row1.setSpacing(0)
-        row1.addWidget(analog_level_time)
-        row1.addWidget(analog_rising)
+        row1.addWidget(self.analog_level_time)
+        row1.addWidget(self.analog_rising)
 
         row2 = QHBoxLayout()
         row2.setContentsMargins(0, 0, 0, 0)
         row2.setSpacing(0)
-        row2.addWidget(analog_level)
-        row2.addWidget(analog_falling)
-        analog_level_time.setChecked(True)
+        row2.addWidget(self.analog_level)
+        row2.addWidget(self.analog_falling)
+        self.analog_level_time.setChecked(True)
 
-        layout.addLayout(row1)
-        layout.addLayout(row2)
+        self.layout.addLayout(row1)
+        self.layout.addLayout(row2)
 
         self.bit_grid = BitGrid()
 
-        layout.addWidget(self.bit_grid)
-        self.setLayout(layout)
+        self.layout.addWidget(self.bit_grid)
+    
+    def getTrigger(self) -> DigitalTrigger:
+        if self.analog_level_time.isChecked():
+            return self.bit_grid.getTriggerBuilder().auto()
+        elif self.analog_rising.isChecked():
+            return self.bit_grid.getTriggerBuilder().starts_matching()
+        elif self.analog_level.isChecked():
+            return self.bit_grid.getTriggerBuilder().is_matching()
+        elif self.analog_falling.isChecked():
+            return self.bit_grid.getTriggerBuilder().stops_matching()
+        else:
+            raise ValueError("No trigger mode selected")
+    
 
 class DeviceConfigWidget(QGroupBox):
     def set_adapter(self, adapter: IFleaScopeAdapter):
         self.adapter = adapter
         self.setTitle(adapter.getDevicename())
-
+    
+    def getProble(self) -> str:
+        if self.x1_button.isChecked():
+            return "x1"
+        elif self.x10_button.isChecked():
+            return "x10"
+        else:
+            raise ValueError("No probe selected")
+        
+    def getTimeFrame(self) -> float:
+        return self.time_frame_dial.getValue()
+    
+    def getTrigger(self) -> AnalogTrigger | DigitalTrigger:
+        return self.value_stack.currentWidget().getTrigger()
+    
     def __init__(self):
         super().__init__()
         main_layout = QGridLayout(self)
@@ -425,13 +480,13 @@ class DeviceConfigWidget(QGroupBox):
 
         main_layout.addLayout(transport_control, 0, 1, 1, 2)
 
-        time_frame_dial = LogKnob("Capture", "s", -13, 1.5)
-        time_frame_dial.setValue(0.1)
+        self.time_frame_dial = LogKnob("Capture", "s", -13, 1.5)
+        self.time_frame_dial.setValue(0.1)
         delay_dial = QuadraticKnob("Delay", "s", 0, 1)
         delay_dial.setValue(0.1)
         delay_dial.setValue(0)
 
-        main_layout.addWidget(time_frame_dial, 2, 0, 2, 2)
+        main_layout.addWidget(self.time_frame_dial, 2, 0, 2, 2)
         main_layout.addWidget(delay_dial, 2, 2, 2, 2)
 
         # Trigger mode selector (Analog / Digital)
@@ -478,23 +533,23 @@ class DeviceConfigWidget(QGroupBox):
         main_layout.addWidget(bnc_button, 3, 10)
         bnc_button.setChecked(True)
 
-        x1_button = QToolButton()
-        x1_button.setText("x1")
-        x1_button.setFixedSize(GRID_SIZE, GRID_SIZE)
-        x1_button.setCheckable(True)
-        main_layout.addWidget(x1_button, 0, 8)
+        self.x1_button = QToolButton()
+        self.x1_button.setText("x1")
+        self.x1_button.setFixedSize(GRID_SIZE, GRID_SIZE)
+        self.x1_button.setCheckable(True)
+        main_layout.addWidget(self.x1_button, 0, 8)
 
-        x10_button = QToolButton()
-        x10_button.setText("x10")
-        x10_button.setCheckable(True)
-        x10_button.setFixedSize(GRID_SIZE, GRID_SIZE)
-        main_layout.addWidget(x10_button, 1, 8)
+        self.x10_button = QToolButton()
+        self.x10_button.setText("x10")
+        self.x10_button.setCheckable(True)
+        self.x10_button.setFixedSize(GRID_SIZE, GRID_SIZE)
+        main_layout.addWidget(self.x10_button, 1, 8)
 
         buttongroup = QButtonGroup(self)
         buttongroup.setExclusive(True)
-        buttongroup.addButton(x1_button)
-        buttongroup.addButton(x10_button)
-        x1_button.setChecked(True)
+        buttongroup.addButton(self.x1_button)
+        buttongroup.addButton(self.x10_button)
+        self.x1_button.setChecked(True)
 
         cal_0v = QToolButton()
         cal_0v.setText("0V")

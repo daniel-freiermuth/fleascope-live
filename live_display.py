@@ -36,6 +36,7 @@ class SidePanel(QtWidgets.QScrollArea):
                 self.newDeviceCallback(device)
             except Exception as e:
                 self.toast_manager.show(f"Failed to connect to {device_name}: {e}", level="error")
+                raise e
         self.add_device_button.setEnabled(True)
         self.add_device_button.setChecked(False)
     
@@ -72,12 +73,6 @@ class LivePlotApp(QtWidgets.QWidget):
         self.closing = True
         for input in self.inputs:
             input['device'].unblock()
-
-    def toggle_pause(self):
-        if self.pause_btn.isChecked():
-            self.pause_btn.setText("Resume")
-        else:
-            self.pause_btn.setText("Pause")
 
     def pretty_prefix(self, x: float):
         """Give the number an appropriate SI prefix.
@@ -172,34 +167,6 @@ class LivePlotApp(QtWidgets.QWidget):
             self.ys.append(np.zeros(2000))
 
         # === Timer Update ===
-        self.update_ts: list[threading.Thread] = []
-        for i, input in enumerate(self.inputs):
-            t = threading.Thread(
-                target=self.update_data, args=(input, i), daemon=True
-            )
-            t.start()
-            self.update_ts.append(t)
-
-    def update_data(self, input: InputType, index: int):
-        while not self.closing:
-            if self.pause_btn.isChecked():
-                time.sleep(0.3)
-                continue
-            scale = self.slider_to_value(self.slider.value())
-            mode = self.dropdown.currentText()
-
-            if mode == "x1":
-                probe= input['device'].x1
-            else:
-                probe = input['device'].x10
-            
-            capture_time = timedelta(seconds=scale)
-
-            data = probe.read( capture_time, trigger=input['trigger'])
-
-            self.index = data.index
-            self.ys[index] = data['bnc']
-            self.curves[index].setData(self.index, self.ys[index])
 
 def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)
