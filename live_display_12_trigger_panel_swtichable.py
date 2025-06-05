@@ -252,19 +252,50 @@ class AnalogTriggerPanel(QWidget):
         super().__init__()
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
         self.setContentsMargins(0,0,0,0)
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(0,0,0,0)
         layout.setSpacing(0)
 
-        self.dial = Knob("Trigger level", "V", -66, 66)
+        trigger_mode_group = QButtonGroup(self)
+        trigger_mode_group.setExclusive(True)
+
+        analog_level_time = QToolButton()
+        analog_level_time.setText("↩️")
+
+        analog_rising = QToolButton()
+        analog_rising.setText("↗️")
+
+        analog_level = QToolButton()
+        analog_level.setText("➡️️")
+
+        analog_falling = QToolButton()
+        analog_falling.setText("↘️")
+
+        for btn in (analog_level_time, analog_rising, analog_level, analog_falling):
+            btn.setMinimumSize(GRID_SIZE, GRID_SIZE)
+            btn.setMaximumSize(GRID_SIZE, GRID_SIZE)
+            btn.setCheckable(True)
+            trigger_mode_group.addButton(btn)
+        
+        row1 = QHBoxLayout()
+        row1.setContentsMargins(0, 0, 0, 0)
+        row1.setSpacing(0)
+        row1.addWidget(analog_level_time)
+        row1.addWidget(analog_rising)
+
+        row2 = QHBoxLayout()
+        row2.setContentsMargins(0, 0, 0, 0)
+        row2.setSpacing(0)
+        row2.addWidget(analog_level)
+        row2.addWidget(analog_falling)
+
+        layout.addLayout(row1)
+        layout.addLayout(row2)
+
+        self.dial = Knob("Level", "V", -66, 66)
         self.dial.setValue(10)
 
-        self.analog_combo = QComboBox()
-        self.analog_combo.addItems(["Rising", "Falling", "Level"])
-
         layout.addWidget(self.dial)
-        layout.addWidget(self.analog_combo)
-        self.setLayout(layout)
 
 class DigitalTriggerPanel(QWidget):
     def __init__(self):
@@ -276,30 +307,39 @@ class DigitalTriggerPanel(QWidget):
         layout.setSpacing(0)
 
         self.bit_grid = BitGrid()
-        self.digital_combo = QComboBox()
-        self.digital_combo.addItems(["Start", "Stop", "Match"])
-        self.digital_combo.setContentsMargins(0,0,0,0)
 
         layout.addWidget(self.bit_grid)
-        layout.addWidget(self.digital_combo)
         self.setLayout(layout)
 
 # --- Combined Main Widget ---
 class TriggerConfigWidget(QGroupBox):
     def __init__(self):
         super().__init__()
-        main_layout = QVBoxLayout(self)
+        main_layout = QGridLayout(self)
         main_layout.setSpacing(0)
-        main_layout.setContentsMargins(1,1,1,1)
+        main_layout.setContentsMargins(0,0,0,0)
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
 
+        led = QLabel("🔴")
+        main_layout.addWidget(led, 0, 0, 1, 1)
+
+        time_frame_dial = Knob("Capture", "s", 0.01, 3)
+        time_frame_dial.setValue(0.1)
+        delay_dial = Knob("Delay", "s", 0, 1)
+        time_frame_dial.setValue(0)
+
+        main_layout.addWidget(time_frame_dial, 2, 0, 2, 2)
+        main_layout.addWidget(delay_dial, 2, 2, 2, 2)
+
         # Trigger mode selector (Analog / Digital)
-        self.analog_btn = QPushButton("Analog")
-        self.digital_btn = QPushButton("Digital")
+        self.analog_btn = QPushButton("A")
+        self.digital_btn = QPushButton("D")
 
         for btn in (self.analog_btn, self.digital_btn):
             btn.setCheckable(True)
-            btn.setMinimumWidth(10)
+            btn.setFixedWidth(GRID_SIZE)
+            btn.setFixedHeight(GRID_SIZE)
+            btn.setContentsMargins(0, 0, 0, 0)
 
         mode_group = QButtonGroup(self)
         mode_group.setExclusive(True)
@@ -307,23 +347,22 @@ class TriggerConfigWidget(QGroupBox):
         mode_group.addButton(self.digital_btn)
         self.analog_btn.setChecked(True)
 
-        main_layout.addWidget(self.analog_btn)
-        main_layout.addWidget(self.digital_btn)
-        # main_layout.addLayout(btn_row)
+        main_layout.addWidget(self.analog_btn, 0, 3, 1, 1)
+        main_layout.addWidget(self.digital_btn, 1,3, 1, 1)
 
         # Stacked mode-specific layout
-        self.stack = QStackedLayout()
-        self.stack.addWidget(AnalogTriggerPanel())
-        self.stack.addWidget(DigitalTriggerPanel())
+        self.value_stack = QStackedLayout()
+        self.value_stack.addWidget(AnalogTriggerPanel())
+        self.value_stack.addWidget(DigitalTriggerPanel())
         stack_container = QWidget()
-        stack_container.setLayout(self.stack)
+        stack_container.setLayout(self.value_stack)
         stack_container.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
-        main_layout.addWidget(stack_container)
 
+        main_layout.addWidget(stack_container, 0, 4, 4, 2)
 
         # Button logic
-        self.analog_btn.clicked.connect(lambda: self.stack.setCurrentIndex(0))
-        self.digital_btn.clicked.connect(lambda: self.stack.setCurrentIndex(1))
+        self.analog_btn.clicked.connect(lambda: self.value_stack.setCurrentIndex(0))
+        self.digital_btn.clicked.connect(lambda: self.value_stack.setCurrentIndex(1))
 
     def get_config(self):
         if self.analog_btn.isChecked():
