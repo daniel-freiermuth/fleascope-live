@@ -129,19 +129,7 @@ class LivePlotApp(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.toast_manager = ToastManager(self)
-
-        # === Initialize FleaScope devices ===
-        self.inputs : list[InputType] = [
-            {'device': FleaScope.connect('scope1'),
-             # 'trigger': AnalogTrigger.start_capturing_when().auto(volts=2),
-              'trigger': DigitalTrigger.start_capturing_when().is_matching(),
-              },
-            {'device': FleaScope.connect('scope2'), 'trigger': DigitalTrigger.start_capturing_when().is_matching()},
-        ]
-
-        self.inputs[0]['device'].set_waveform(Waveform.EKG, 1000)
-
-        # === UI
+        self.devices: list[FleaScopeAdapter] = []
 
         self.setWindowTitle("FleaScope Live Plot")
         self.resize(1000, 700)
