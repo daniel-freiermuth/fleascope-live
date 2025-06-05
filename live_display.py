@@ -11,6 +11,8 @@ import sys
 from pyfleascope.trigger_config import BitState
 from pyfleascope.flea_scope import AnalogTrigger, DigitalTrigger, FleaScope, Waveform
 
+from toats import ToastManager
+
 InputType = TypedDict('InputType', {
     'device': FleaScope,
     'trigger': AnalogTrigger | DigitalTrigger
@@ -21,12 +23,14 @@ class SidePanel(QtWidgets.QScrollArea):
     def add_device(self):
         pass
 
-    def __init__(self):
+    def __init__(self, toast_manager: ToastManager):
         super().__init__()
         self.setWidgetResizable(True)
         widget = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(widget)
         self.setWidget(widget)
+
+        self.toast_manager = toast_manager
 
         # === Device name input + add button ===
         add_row = QtWidgets.QHBoxLayout()
@@ -93,6 +97,7 @@ class LivePlotApp(QtWidgets.QWidget):
 
     def __init__(self):
         super().__init__()
+        self.toast_manager = ToastManager(self)
 
         # === Initialize FleaScope devices ===
         self.inputs : list[InputType] = [
