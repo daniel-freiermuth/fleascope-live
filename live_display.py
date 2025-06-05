@@ -231,6 +231,7 @@ class LivePlotApp(QtWidgets.QWidget):
             self.curves[index].setData(self.index, self.ys[index])
 
 def main():
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
     app = QtWidgets.QApplication(sys.argv)
     win = LivePlotApp()
     win.show()
