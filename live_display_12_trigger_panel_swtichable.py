@@ -188,25 +188,63 @@ def format_engineering(value: float, sigfigs: int) -> tuple[str, int]:
     return (sign + mantissa, eng_exponent)
 
 
-class AnalogTriggelLevelWidget(QDial):
-    def __init__(self, lower_limit: float, upper_limit: float):
+class Knob(QWidget):
+    def __init__(self, title: str, unit: str, lower_limit: float, upper_limit: float, steps: int=1321):
         super().__init__()
-        self.setMinimum(-660)
-        self.setMaximum(660)
-        self.setFixedSize(int(GRID_SIZE*1.5), int(GRID_SIZE*1.5))
+        self.setFixedSize(GRID_SIZE*2, GRID_SIZE*2)
         self._upper_limit = upper_limit
         self._lower_limit = lower_limit
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        self.setLayout(layout)
+
+
+        title_label = QLabel(title)
+        layout.addWidget(title_label)
+        font = title_label.font()
+        font.setPointSize(int(GRID_SIZE * 0.3))
+        title_label.setFont(font)
+
+        self._dial = QDial()
+        self._dial.setMinimum(0)
+        self._dial.setMaximum(steps - 1)
+        self._dial.setFixedSize(int(GRID_SIZE*1), int(GRID_SIZE*1))
+
+        dial_layout = QHBoxLayout()
+        dial_layout.setContentsMargins(0, 0, 0, 0)
+        dial_layout.setSpacing(0)
+        dial_layout.addStretch()
+        dial_layout.addWidget(self._dial)
+        dial_layout.addStretch()
+        layout.addLayout(dial_layout)
+
+        dial_label = QLabel(" (mV):")
+        dial_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignRight)
+        dial_label.setContentsMargins(0, 0, 0, 0)
+        dial_label.setFont(font)
+        layout.addWidget(dial_label)
+
+        self._dial.valueChanged.connect(lambda v: dial_label.setText(f"{pretty_prefix(self._step_to_value(v))}{unit}"))
+    
+    def _step_to_value(self, step: int) -> float:
+        return step / self._dial.maximum() * (self._upper_limit - self._lower_limit) + self._lower_limit
+
+    def _value_to_step(self, value: float) -> int:
+        return int((value - self._lower_limit) / (self._upper_limit - self._lower_limit) * self._dial.maximum())
 
     def setLimits(self, lower_limit: float, upper_limit: float):
         self._lower_limit = lower_limit
         self._upper_limit = upper_limit
     
-    @override
     def setValue(self, a0: float):
-        super().setValue(int((a0 - self._lower_limit) / (self._upper_limit - self._lower_limit) * (self.maximum() - self.minimum())) + self.minimum())
+        self._dial.setValue(self._value_to_step(a0))
     
-    def valueChangedConnect(self, slot: Callable[[float], None]):
-        self.valueChanged.connect(lambda v: slot((v - self.minimum()) / (self.maximum() - self.minimum()) * (self._upper_limit - self._lower_limit) + self._lower_limit))
+    def onValueChanged(self, slot: Callable[[float], None]):
+        def f(value: int):
+            v = self._step_to_value(value)
+            slot(v)
+        self._dial.valueChanged.connect(f)
     
 
 class AnalogTriggerPanel(QWidget):
@@ -218,17 +256,13 @@ class AnalogTriggerPanel(QWidget):
         layout.setContentsMargins(0,0,0,0)
         layout.setSpacing(0)
 
-        self.dial = AnalogTriggelLevelWidget(-66, 66)
-        dial_label = QLabel(" (mV):")
-        dial_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.dial.valueChangedConnect(lambda v: dial_label.setText(f"{pretty_prefix(v)}V"))
+        self.dial = Knob("Trigger level", "V", -66, 66)
         self.dial.setValue(10)
 
         self.analog_combo = QComboBox()
         self.analog_combo.addItems(["Rising", "Falling", "Level"])
 
         layout.addWidget(self.dial)
-        layout.addWidget(dial_label)
         layout.addWidget(self.analog_combo)
         self.setLayout(layout)
 
