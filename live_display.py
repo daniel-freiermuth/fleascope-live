@@ -21,7 +21,18 @@ InputType = TypedDict('InputType', {
 class SidePanel(QtWidgets.QScrollArea):
     # QScrollArea -> QWidget -> QVBoxLayout
     def add_device(self):
-        pass
+        self.add_device_button.setEnabled(False)
+        self.add_device_button.setChecked(True)
+        device_name = self.device_name_input.text().strip()
+        if device_name:
+            try:
+                device = FleaScope.connect(device_name)
+                self.toast_manager.show(f"Connected to {device_name}", level="success")
+                self.device_name_input.clear()
+            except Exception as e:
+                self.toast_manager.show(f"Failed to connect to {device_name}: {e}", level="error")
+        self.add_device_button.setEnabled(True)
+        self.add_device_button.setChecked(False)
 
     def __init__(self, toast_manager: ToastManager):
         super().__init__()
@@ -34,12 +45,12 @@ class SidePanel(QtWidgets.QScrollArea):
 
         # === Device name input + add button ===
         add_row = QtWidgets.QHBoxLayout()
-        device_name_input = QtWidgets.QLineEdit()
-        device_name_input.setPlaceholderText("Device name")
-        add_device_button = QtWidgets.QPushButton("+ Add Device")
-        add_device_button.clicked.connect(self.add_device)
-        add_row.addWidget(device_name_input)
-        add_row.addWidget(add_device_button)
+        self.device_name_input = QtWidgets.QLineEdit()
+        self.device_name_input.setPlaceholderText("Device name")
+        self.add_device_button = QtWidgets.QPushButton("+ Add Device")
+        self.add_device_button.clicked.connect(self.add_device)
+        add_row.addWidget(self.device_name_input)
+        add_row.addWidget(self.add_device_button)
 
         layout.addStretch()
         layout.addLayout(add_row)
