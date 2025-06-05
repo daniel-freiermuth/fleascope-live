@@ -32,3 +32,6 @@ class FleaScopeAdapter(IFleaScopeAdapter):
     def cal_3v3(self):
         self.getProbe().calibrate_3v3()
         self.toast_manager.show("Calibrated to 3.3V", level="success")
+    
+    def getDevicename(self) -> str:
+        return self.device.hostname

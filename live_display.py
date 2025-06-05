@@ -95,13 +95,17 @@ class LivePlotApp(QtWidgets.QWidget):
     
     def add_device(self, device: FleaScope):
         hostname = device.hostname
+        if any(filter(lambda d: d.getDevicename() == hostname, self.devices)):
+            self.toast_manager.show(f"Device {hostname} already added", level="warning")
+            return
         plot = self.plots.addPlot(title=f"Signal {hostname}")
         plot.showGrid(x=True, y=True)
         curve = plot.plot(pen='y')
         self.plots.nextRow()
         config_widget = self.side_panel.add_device_config()
-        adapter = FleaScopeAdapter(device, config_widget, curve)
+        adapter = FleaScopeAdapter(device, config_widget, curve, self.toast_manager)
         config_widget.set_adapter(adapter)
+        self.devices.append(adapter)
 
     def save_snapshot(self):
         filename = QtWidgets.QFileDialog.getSaveFileName(self, "Save Plot", "", "CSV Files (*.csv)")[0]
