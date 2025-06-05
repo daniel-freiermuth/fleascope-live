@@ -1,9 +1,16 @@
 from collections.abc import Callable
+import math
+from typing import override
 from PyQt6 import QtWidgets, QtCore, QtGui
-from PyQt6.QtWidgets import QToolButton, QWidget, QGridLayout, QLabel, QComboBox, QColorDialog, QCheckBox, QPushButton
+from PyQt6.QtGui import QColor
+from PyQt6.QtWidgets import QSizePolicy, QToolButton, QWidget, QGridLayout, QLabel, QComboBox, QColorDialog, QCheckBox, QPushButton, QVBoxLayout
+from PyQt6.QtWidgets import QHBoxLayout, QGroupBox, QLineEdit, QStackedLayout, QButtonGroup, QDial, QStyle
 import pyqtgraph as pg
 import numpy as np
 import sys
+import signal
+
+GRID_SIZE = 30
 
 class Toast(QtWidgets.QLabel):
     closed = QtCore.pyqtSignal()
@@ -92,16 +99,20 @@ class Device:
         self.step = 0
 
 class TriStateBitButton(QToolButton):
-    STATES = [ "?", "0", "1" ]
+    STATES = [
+        ("?", None),
+        ("0", QColor("red")),
+        ("1", QColor("green"))
+    ]
 
     def __init__(self, bit_index):
         super().__init__()
         self.bit_index = bit_index
         self.state_index = 0
         self.setCheckable(True)
-        self.setMinimumSize(16, 16)
+        self.setMinimumSize(16,16)
         self.setMaximumSize(16, 16)
-        # self.setFocusPolicy(NoFocus)
+        # self.setFocusPolicy(Qt.NoFocus)
         self.setToolTip(f"Bit {bit_index}")
         self.update_state()
         self.clicked.connect(self.next_state)
@@ -111,8 +122,9 @@ class TriStateBitButton(QToolButton):
         self.update_state()
 
     def update_state(self):
-        text = self.STATES[self.state_index]
+        text, color = self.STATES[self.state_index]
         self.setText(text)
+        bg = color.name() if color else "none"
         self.setStyleSheet(f"""
             QToolButton {{
                 border: 1px solid gray;
@@ -120,13 +132,14 @@ class TriStateBitButton(QToolButton):
         """)
 
     def get_state(self):
-        return self.STATES[self.state_index]
+        return ["dontcare", "0", "1"][self.state_index]
+
 
 class BitGrid(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def __init__(self):
+        super().__init__()
         layout = QGridLayout()
-        layout.setSpacing(2)
+        layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
 
         self.buttons = []
@@ -141,20 +154,157 @@ class BitGrid(QWidget):
     def get_bitmask(self):
         return [btn.get_state() for btn in self.buttons]
 
-class TriggerWidget(QWidget):
-    checkbox_grid: list[list[QCheckBox]] = []
+def pretty_prefix(x: float):
+    """Give the number an appropriate SI prefix.
+
+    :param x: Too big or too small number.
+    :returns: String containing a number between 1 and 1000 and SI prefix.
+    """
+    if x == 0:
+        return "0  "
+
+    l = math.floor(math.log10(abs(x)))
+
+    div, mod = divmod(l, 3)
+    return "%.3g %s" % (x * 10**(-l + mod), " kMGTPEZYyzafpnµm"[div])
+
+def format_engineering(value: float, sigfigs: int) -> tuple[str, int]:
+    if value == 0:
+        return ("0", 0)
+
+    sign = "-" if value < 0 else ""
+    abs_val = abs(value)
+
+    exponent = int(math.floor(math.log10(abs_val)))
+    eng_exponent = 3 * (exponent // 3)
+    scaled: float = abs_val / (10 ** eng_exponent)
+
+    # Round to significant figures
+    digits = sigfigs - int(math.floor(math.log10(scaled))) - 1
+    rounded = round(scaled, digits)
+
+    # Format and strip trailing junk
+    mantissa = f"{rounded:.{digits}f}".rstrip("0").rstrip(".")
+    return (sign + mantissa, eng_exponent)
+
+
+class AnalogTriggelLevelWidget(QDial):
+    def __init__(self, lower_limit: float, upper_limit: float):
+        super().__init__()
+        self.setMinimum(-660)
+        self.setMaximum(660)
+        self.setFixedSize(int(GRID_SIZE*1.5), int(GRID_SIZE*1.5))
+        self._upper_limit = upper_limit
+        self._lower_limit = lower_limit
+
+    def setLimits(self, lower_limit: float, upper_limit: float):
+        self._lower_limit = lower_limit
+        self._upper_limit = upper_limit
     
+    @override
+    def setValue(self, a0: float):
+        super().setValue(int((a0 - self._lower_limit) / (self._upper_limit - self._lower_limit) * (self.maximum() - self.minimum())) + self.minimum())
+    
+    def valueChangedConnect(self, slot: Callable[[float], None]):
+        self.valueChanged.connect(lambda v: slot((v - self.minimum()) / (self.maximum() - self.minimum()) * (self._upper_limit - self._lower_limit) + self._lower_limit))
+    
+
+class AnalogTriggerPanel(QWidget):
     def __init__(self):
         super().__init__()
-        self.grid_layout = QGridLayout(self)
-        for i in range(3):
-            row: list[QCheckBox] = []
-            for j in range(3):
-                cb = QCheckBox()
-                cb.setToolTip(f"B {i * 3 + j}. Click to cycle HIGHT → LOW → DON'T CARE")
-                self.grid_layout.addWidget(cb, i, j)
-                row.append(cb)
-            self.checkbox_grid.append(row)
+        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
+        self.setContentsMargins(0,0,0,0)
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0,0,0,0)
+        layout.setSpacing(0)
+
+        self.dial = AnalogTriggelLevelWidget(-66, 66)
+        dial_label = QLabel(" (mV):")
+        dial_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.dial.valueChangedConnect(lambda v: dial_label.setText(f"{pretty_prefix(v)}V"))
+        self.dial.setValue(10)
+
+        self.analog_combo = QComboBox()
+        self.analog_combo.addItems(["Rising", "Falling", "Level"])
+
+        layout.addWidget(self.dial)
+        layout.addWidget(dial_label)
+        layout.addWidget(self.analog_combo)
+        self.setLayout(layout)
+
+class DigitalTriggerPanel(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
+        layout = QVBoxLayout()
+        self.setContentsMargins(0,0,0,0)
+        layout.setContentsMargins(0,0,0,0)
+        layout.setSpacing(0)
+
+        self.bit_grid = BitGrid()
+        self.digital_combo = QComboBox()
+        self.digital_combo.addItems(["Start", "Stop", "Match"])
+        self.digital_combo.setContentsMargins(0,0,0,0)
+
+        layout.addWidget(self.bit_grid)
+        layout.addWidget(self.digital_combo)
+        self.setLayout(layout)
+
+# --- Combined Main Widget ---
+class TriggerConfigWidget(QGroupBox):
+    def __init__(self):
+        super().__init__()
+        main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(1,1,1,1)
+        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
+
+        # Trigger mode selector (Analog / Digital)
+        self.analog_btn = QPushButton("Analog")
+        self.digital_btn = QPushButton("Digital")
+
+        for btn in (self.analog_btn, self.digital_btn):
+            btn.setCheckable(True)
+            btn.setMinimumWidth(10)
+
+        mode_group = QButtonGroup(self)
+        mode_group.setExclusive(True)
+        mode_group.addButton(self.analog_btn)
+        mode_group.addButton(self.digital_btn)
+        self.analog_btn.setChecked(True)
+
+        main_layout.addWidget(self.analog_btn)
+        main_layout.addWidget(self.digital_btn)
+        # main_layout.addLayout(btn_row)
+
+        # Stacked mode-specific layout
+        self.stack = QStackedLayout()
+        self.stack.addWidget(AnalogTriggerPanel())
+        self.stack.addWidget(DigitalTriggerPanel())
+        stack_container = QWidget()
+        stack_container.setLayout(self.stack)
+        stack_container.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
+        main_layout.addWidget(stack_container)
+
+
+        # Button logic
+        self.analog_btn.clicked.connect(lambda: self.stack.setCurrentIndex(0))
+        self.digital_btn.clicked.connect(lambda: self.stack.setCurrentIndex(1))
+
+    def get_config(self):
+        if self.analog_btn.isChecked():
+            return {
+                "mode": "analog",
+                "threshold_mV": self.dial.value(),
+                "condition": self.analog_combo.currentText()
+            }
+        else:
+            return {
+                "mode": "digital",
+                "bitmask": self.bit_grid.get_bitmask(),
+                "condition": self.digital_combo.currentText()
+            }
+
 
 class DeviceConfigWidget(QtWidgets.QGroupBox):
     def __init__(self, device_name: str, on_delete: Callable[[], None], on_config_change: Callable[[], None]):
@@ -162,12 +312,12 @@ class DeviceConfigWidget(QtWidgets.QGroupBox):
         self.setTitle(device_name)
         self.setStyleSheet("DeviceConfigWidget { border: 1px solid #ccc; border-radius: 6px; margin-top: 20px; }")
 
-        layout = QtWidgets.QGridLayout()
+        layout = QGridLayout()
         self.setLayout(layout)
 
         # 'X' icon button in the corner
-        self.delete_button = QtWidgets.QToolButton()
-        self.delete_button.setIcon(self.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_TitleBarCloseButton))
+        self.delete_button = QToolButton()
+        self.delete_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_TitleBarCloseButton))
         self.delete_button.setToolTip("Remove device")
         self.delete_button.setStyleSheet("border: none;")
         self.delete_button.clicked.connect(on_delete)
@@ -195,11 +345,10 @@ class DeviceConfigWidget(QtWidgets.QGroupBox):
         layout.addWidget(QtWidgets.QLabel("Noise:"), 3, 0)
         layout.addWidget(self.slider, 3, 1, 1, 2)
 
-        grid_widget = TriggerWidget()
-        layout.addWidget(QtWidgets.QLabel("Matrix:"), 4, 0)
-        layout.addWidget(grid_widget, 4, 1, 1, 1)
-        layout.addWidget(BitMaskWidget(), 5, 1, 1, 1)
-        layout.addWidget(BitGrid(), 6, 2, 1, 1)
+        sub_layout = QGridLayout()
+        trigger_widget = TriggerConfigWidget()
+        sub_layout.addWidget(trigger_widget, 0, 4, 1, 3)
+        layout.addLayout(sub_layout, 4, 0, 1, 2)
 
     def pick_color(self):
         color = QtWidgets.QColorDialog.getColor()
@@ -332,6 +481,8 @@ class LivePlotApp(QtWidgets.QWidget):
             device.curve.setData(self.x, device.data)
 
 def main():
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
     app = QtWidgets.QApplication(sys.argv)
     win = LivePlotApp()
     win.show()
