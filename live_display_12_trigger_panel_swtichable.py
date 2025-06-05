@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from collections.abc import Callable
 import math
 from typing import override
@@ -189,11 +190,9 @@ def format_engineering(value: float, sigfigs: int) -> tuple[str, int]:
 
 
 class Knob(QWidget):
-    def __init__(self, title: str, unit: str, lower_limit: float, upper_limit: float, steps: int=1321):
+    def __init__(self, title: str, unit: str, steps: int):
         super().__init__()
         self.setFixedSize(GRID_SIZE*2, GRID_SIZE*2)
-        self._upper_limit = upper_limit
-        self._lower_limit = lower_limit
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -227,6 +226,29 @@ class Knob(QWidget):
 
         self._dial.valueChanged.connect(lambda v: dial_label.setText(f"{pretty_prefix(self._step_to_value(v))}{unit}"))
     
+    def setValue(self, a0: float):
+        self._dial.setValue(self._value_to_step(a0))
+    
+    def onValueChanged(self, slot: Callable[[float], None]):
+        def f(value: int):
+            v = self._step_to_value(value)
+            slot(v)
+        self._dial.valueChanged.connect(f)
+
+    @abstractmethod
+    def _step_to_value(self, step: int) -> float:
+        return NotImplemented
+
+    @abstractmethod
+    def _value_to_step(self, value: float) -> int:
+        return NotImplemented
+    
+class LinearKnob(Knob):
+    def __init__(self, title: str, unit: str, lower_limit: float, upper_limit: float, steps: int=1321):
+        super().__init__(title, unit, steps)
+        self._upper_limit = upper_limit
+        self._lower_limit = lower_limit
+
     def _step_to_value(self, step: int) -> float:
         return step / self._dial.maximum() * (self._upper_limit - self._lower_limit) + self._lower_limit
 
@@ -236,15 +258,36 @@ class Knob(QWidget):
     def setLimits(self, lower_limit: float, upper_limit: float):
         self._lower_limit = lower_limit
         self._upper_limit = upper_limit
+
+class LogKnob(Knob):
+    def __init__(self, title: str, unit: str, min_exp: float, max_exp: float, steps: int=1321):
+        super().__init__(title, unit, steps)
+        self._min_exp = min_exp
+        self._max_exp = max_exp
+
+    def _step_to_value(self, step: int) -> float:
+        return 2** (step / self._dial.maximum() * (self._max_exp - self._min_exp) + self._min_exp)
+
+    def _value_to_step(self, value: float) -> int:
+        return int((math.log(value, 2) - self._min_exp) / (self._max_exp - self._min_exp) * self._dial.maximum())
     
-    def setValue(self, a0: float):
-        self._dial.setValue(self._value_to_step(a0))
-    
-    def onValueChanged(self, slot: Callable[[float], None]):
-        def f(value: int):
-            v = self._step_to_value(value)
-            slot(v)
-        self._dial.valueChanged.connect(f)
+class QuadraticKnob(LinearKnob):
+    def __init__(self, title: str, unit: str, lower_limit: float, upper_limit: float, steps: int=1321):
+        self._lower_is_negative = lower_limit < 0
+        self._upper_is_negative = upper_limit < 0
+
+        sqrt_lower = math.sqrt(abs(lower_limit)) * (-1 if self._lower_is_negative else 1)
+        sqrt_upper = math.sqrt(abs(upper_limit)) * (-1 if self._upper_is_negative else 1)
+        super().__init__(title, unit, sqrt_lower, sqrt_upper, steps)
+
+    def _step_to_value(self, step: int) -> float:
+        v = super()._step_to_value(step)
+        return v**2 if v >= 0 else -(v**2)
+
+    def _value_to_step(self, value: float) -> int:
+        sqrt_value = math.sqrt(abs(value)) * (-1 if value < 0 else 1)
+        return super()._value_to_step(sqrt_value)
+
     
 
 class AnalogTriggerPanel(QWidget):
@@ -292,7 +335,7 @@ class AnalogTriggerPanel(QWidget):
         layout.addLayout(row1)
         layout.addLayout(row2)
 
-        self.dial = Knob("Level", "V", -66, 66)
+        self.dial = LinearKnob("Level", "V", -66, 66)
         self.dial.setValue(10)
 
         layout.addWidget(self.dial)
@@ -323,10 +366,10 @@ class TriggerConfigWidget(QGroupBox):
         led = QLabel("🔴")
         main_layout.addWidget(led, 0, 0, 1, 1)
 
-        time_frame_dial = Knob("Capture", "s", 0.01, 3)
+        time_frame_dial = LogKnob("Capture", "s", -13, 1.5)
         time_frame_dial.setValue(0.1)
-        delay_dial = Knob("Delay", "s", 0, 1)
-        time_frame_dial.setValue(0)
+        delay_dial = QuadraticKnob("Delay", "s", 0, 1)
+        delay_dial.setValue(0)
 
         main_layout.addWidget(time_frame_dial, 2, 0, 2, 2)
         main_layout.addWidget(delay_dial, 2, 2, 2, 2)
@@ -509,6 +552,7 @@ class LivePlotApp(QtWidgets.QWidget):
 
         except Exception as e:
             self.toast_manager.show(str(e), level="error")
+            print(e)
 
     def remove_device(self, name:str):
         device = self.devices.pop(name, None)
