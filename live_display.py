@@ -11,20 +11,16 @@ import numpy as np
 import sys
 
 from pyfleascope.trigger_config import BitState
-from pyfleascope.flea_scope import AnalogTrigger, DigitalTrigger, FleaScope, Waveform
+from pyfleascope.flea_scope import AnalogTrigger, DigitalTrigger, FleaProbe, FleaScope, Waveform
 
 from toats import ToastManager
 from device_config_ui import DeviceConfigWidget, IFleaScopeAdapter
+from fleascope_adapter import FleaScopeAdapter
 
 InputType = TypedDict('InputType', {
     'device': FleaScope,
     'trigger': AnalogTrigger | DigitalTrigger
 })
-
-class FleaScopeAdapter(IFleaScopeAdapter):
-    def __init__(self, device: FleaScope, configWidget: DeviceConfigWidget):
-        self.configWidget = configWidget
-        self.device = device
 
 class SidePanel(QtWidgets.QScrollArea):
     # QScrollArea -> QWidget -> QVBoxLayout
@@ -101,10 +97,10 @@ class LivePlotApp(QtWidgets.QWidget):
         hostname = device.hostname
         plot = self.plots.addPlot(title=f"Signal {hostname}")
         plot.showGrid(x=True, y=True)
-        self.curves.append( plot.plot(pen='y'))
+        curve = plot.plot(pen='y')
         self.plots.nextRow()
         config_widget = self.side_panel.add_device_config()
-        adapter = FleaScopeAdapter(device, config_widget)
+        adapter = FleaScopeAdapter(device, config_widget, curve)
         config_widget.set_adapter(adapter)
 
     def save_snapshot(self):
