@@ -27,6 +27,7 @@ class SidePanel(QtWidgets.QScrollArea):
     def _add_device(self):
         self.add_device_button.setEnabled(False)
         self.add_device_button.setChecked(True)
+        self.setFixedWidth(360)
         device_name = self.device_name_input.text().strip()
         if device_name:
             try:
