@@ -2,19 +2,23 @@ from datetime import timedelta
 import logging
 import threading
 import time
-from typing import Literal
+from typing import Callable, Literal, Self
+
+from PyQt6.QtCore import QTimer
 from device_config_ui import DeviceConfigWidget, IFleaScopeAdapter
 from pyfleascope.flea_scope import FleaProbe, FleaScope
 from toats import ToastManager
 import pyqtgraph as pg
 
 class FleaScopeAdapter(IFleaScopeAdapter):
-    def __init__(self, device: FleaScope, configWidget: DeviceConfigWidget, curve: pg.PlotDataItem, toast_manager: ToastManager):
+    def __init__(self, device: FleaScope, configWidget: DeviceConfigWidget, curve: pg.PlotDataItem, toast_manager: ToastManager, adapter_list: list[Self], delete_plot: Callable[[], None]):
         self.configWidget = configWidget
         self.device = device
         self.curve = curve
         self.toast_manager = toast_manager
         self.state : Literal['running'] | Literal['closing'] | Literal['step'] | Literal['paused'] = "running"
+        self.adapter_list = adapter_list
+        self.delete_plot = delete_plot
 
         self.t = threading.Thread(
             target=self.update_data, daemon=True
@@ -37,6 +41,13 @@ class FleaScopeAdapter(IFleaScopeAdapter):
             data = probe.read( capture_time, trigger)
             if data.size != 0:
                 self.curve.setData(data.index, data['bnc'])
+    
+    def removeDevice(self):
+        logging.debug(f"Removing device {self.device.hostname}")
+        self.state = "closing"
+        self.configWidget.removeDevice()
+        self.adapter_list.remove(self)
+        self.delete_plot()
     
     def pause(self):
         if not self.is_closing():

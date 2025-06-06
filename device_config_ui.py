@@ -17,6 +17,9 @@ class IFleaScopeAdapter:
     @abstractmethod
     def capture_settings_changed(self):
         return NotImplemented
+    @abstractmethod
+    def removeDevice(self):
+        return NotImplemented
 
 class TriStateBitButton(QToolButton):
     STATES = [
@@ -444,6 +447,15 @@ class DeviceConfigWidget(QGroupBox):
     def forwardCaptureSettingsChanged(self):
         self.adapter.capture_settings_changed()
 
+    def removeDevice(self):
+        p = self.parent()
+        assert p is not None, "DeviceConfigWidget must be a child of a parent widget"
+        p.layout().removeWidget(self)
+        self.deleteLater()
+    
+    def removeDeviceIndirection(self):
+        self.adapter.removeDevice()
+
     def __init__(self):
         super().__init__()
         main_layout = QGridLayout(self)
@@ -579,6 +591,7 @@ class DeviceConfigWidget(QGroupBox):
         delete_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogDiscardButton))
         delete_button.setToolTip("Remove device")
         delete_button.setFixedSize(GRID_SIZE, GRID_SIZE)
+        delete_button.clicked.connect(self.removeDeviceIndirection)
 
         main_layout.addWidget(delete_button, 0, 10)
 

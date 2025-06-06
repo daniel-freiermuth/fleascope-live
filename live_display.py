@@ -37,7 +37,6 @@ class SidePanel(QtWidgets.QScrollArea):
                 self.newDeviceCallback(device)
             except Exception as e:
                 self.toast_manager.show(f"Failed to connect to {device_name}: {e}", level="error")
-                raise e
         self.add_device_button.setEnabled(True)
         self.add_device_button.setChecked(False)
     
@@ -94,12 +93,13 @@ class LivePlotApp(QtWidgets.QWidget):
         if any(filter(lambda d: d.getDevicename() == hostname, self.devices)):
             self.toast_manager.show(f"Device {hostname} already added", level="warning")
             return
-        plot = self.plots.addPlot(title=f"Signal {hostname}")
+        plot: pg.PlotItem = self.plots.addPlot(title=f"Signal {hostname}")
         plot.showGrid(x=True, y=True)
         curve = plot.plot(pen='y')
         self.plots.nextRow()
         config_widget = self.side_panel.add_device_config()
-        adapter = FleaScopeAdapter(device, config_widget, curve, self.toast_manager)
+        adapter = FleaScopeAdapter(device, config_widget, curve, self.toast_manager, self.devices,
+                                   lambda: self.plots.removeItem(plot))
         config_widget.set_adapter(adapter)
         self.devices.append(adapter)
 
@@ -115,18 +115,6 @@ class LivePlotApp(QtWidgets.QWidget):
             df.to_csv(filename, index=False)
             print(f"Saved to {filename}")
     
-    def slider_to_value(self, value: int) -> float:
-        """Convert slider value to a time frame in seconds.
-
-        :param value: Slider value, between -13 and 1.
-        :returns: Time frame in seconds.
-        """
-        return 2**(value/self.slider_granularity)
-    
-    def update_slider_display(self, value: int):
-        self.slider_value_label.setText(self.pretty_prefix(self.slider_to_value(value)) + "s")
-
-
     def __init__(self):
         super().__init__()
         self.toast_manager = ToastManager(self)
@@ -143,31 +131,8 @@ class LivePlotApp(QtWidgets.QWidget):
         self.side_panel = SidePanel(self.toast_manager, self.add_device)
         layout.addWidget(self.side_panel)
 
-        self.plot_list = []
-        self.curves = []
+        # plot.setXLink(self.plot_list[0])
 
-        def add_plot(hostname):
-            plot = self.plots.addPlot(title=f"Signal {hostname}")
-            plot.showGrid(x=True, y=True)
-            self.plot_list.append(plot)
-            self.curves.append( plot.plot(pen='y'))
-
-        for input in self.inputs[:-1]:
-            add_plot(input["device"].hostname)
-            self.plots.nextRow()
-
-        add_plot(self.inputs[-1]["device"].hostname)
-
-        for plot in self.plot_list[1:]:
-            plot.setXLink(self.plot_list[0])
-
-        # === Data State ===
-        self.index = np.arange(2000)
-        self.ys: list[np.ndarray[Any, np.dtype[np.float64]]] = []
-        for _ in self.inputs:
-            self.ys.append(np.zeros(2000))
-
-        # === Timer Update ===
 
 def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)
