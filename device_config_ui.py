@@ -11,17 +11,6 @@ from pyfleascope.trigger_config import AnalogTrigger, BitState, BitTriggerBuilde
 
 GRID_SIZE = 30
 
-class IFleaScopeAdapter:
-    @abstractmethod
-    def getDevicename(self) -> str:
-        return NotImplemented
-    @abstractmethod
-    def capture_settings_changed(self):
-        return NotImplemented
-    @abstractmethod
-    def removeDevice(self):
-        return NotImplemented
-
 class TriStateBitButton(QToolButton):
     STATES = [
         ("?", None),
@@ -64,7 +53,8 @@ class TriStateBitButton(QToolButton):
             raise ValueError("Invalid state index")
 
 class BitGrid(QWidget):
-    def __init__(self, onChange: Callable[[], None]):
+    change_sig = QtCore.pyqtSignal()
+    def __init__(self):
         super().__init__()
         layout = QGridLayout()
         layout.setSpacing(0)
@@ -73,7 +63,7 @@ class BitGrid(QWidget):
         self.buttons: list[TriStateBitButton] = []
         for i in range(9):
             btn = TriStateBitButton(bit_index=i)
-            btn.clicked.connect(onChange)
+            btn.clicked.connect(self.change_sig.emit)
             self.buttons.append(btn)
             row, col = divmod(i, 3)
             layout.addWidget(btn, row, col)
@@ -314,6 +304,7 @@ class DigitalChannelSelectorWidget(QWidget):
         self.setLayout(layout)
 
 class TriggerPanel(QWidget):
+    settings_changed_sig = QtCore.pyqtSignal()
     def __init__(self):
         super().__init__()
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
@@ -327,7 +318,7 @@ class TriggerPanel(QWidget):
         return NotImplemented
 
 class AnalogTriggerPanel(TriggerPanel):
-    def __init__(self, onChange: Callable[[], None]):
+    def __init__(self):
         super().__init__()
 
         trigger_mode_group = QButtonGroup(self)
@@ -348,7 +339,7 @@ class AnalogTriggerPanel(TriggerPanel):
         for btn in (self.analog_level_time, self.analog_rising, self.analog_level, self.analog_falling):
             btn.setFixedSize(GRID_SIZE, GRID_SIZE)
             btn.setCheckable(True)
-            btn.clicked.connect(onChange)
+            btn.clicked.connect(self.settings_changed_sig.emit)
             trigger_mode_group.addButton(btn)
         
         row1 = QHBoxLayout()
@@ -369,7 +360,7 @@ class AnalogTriggerPanel(TriggerPanel):
 
         self.dial = LinearKnob("Level", "V", -66, 66)
         self.dial.setValue(1)
-        self.dial.onValueChanged(lambda f: onChange())
+        self.dial.onValueChanged(lambda f: self.settings_changed_sig.emit())
 
         self.layout.addWidget(self.dial)
     
@@ -387,9 +378,8 @@ class AnalogTriggerPanel(TriggerPanel):
             raise ValueError("No trigger mode selected")
 
 class DigitalTriggerPanel(TriggerPanel):
-    def __init__(self, onChange: Callable[[], None]):
+    def __init__(self):
         super().__init__()
-        self.onChange = onChange
 
         trigger_mode_group = QButtonGroup(self)
         trigger_mode_group.setExclusive(True)
@@ -409,7 +399,7 @@ class DigitalTriggerPanel(TriggerPanel):
         for btn in (self.analog_level_time, self.analog_rising, self.analog_level, self.analog_falling):
             btn.setFixedSize(GRID_SIZE, GRID_SIZE)
             btn.setCheckable(True)
-            btn.clicked.connect(self.onChange)
+            btn.clicked.connect(self.settings_changed_sig.emit)
             trigger_mode_group.addButton(btn)
         
         row1 = QHBoxLayout()
@@ -428,7 +418,8 @@ class DigitalTriggerPanel(TriggerPanel):
         self.layout.addLayout(row1)
         self.layout.addLayout(row2)
 
-        self.bit_grid = BitGrid(self.onChange)
+        self.bit_grid = BitGrid()
+        self.bit_grid.change_sig.connect(self.settings_changed_sig.emit)
 
         self.layout.addWidget(self.bit_grid)
     
@@ -448,10 +439,9 @@ class DigitalTriggerPanel(TriggerPanel):
 class DeviceConfigWidget(QGroupBox):
     cal_0v_sig = QtCore.pyqtSignal()
     cal_3v3_sig = QtCore.pyqtSignal()
-    def set_adapter(self, adapter: IFleaScopeAdapter):
-        self.adapter = adapter
-        self.setTitle(adapter.getDevicename())
-    
+    remove_device_sig = QtCore.pyqtSignal()
+    trigger_settings_changed_sig = QtCore.pyqtSignal()
+
     def getProble(self) -> str:
         if self.x1_button.isChecked():
             return "x1"
@@ -469,20 +459,15 @@ class DeviceConfigWidget(QGroupBox):
     def getDelayValue(self) -> float:
         return self.delay_dial.getValue()
     
-    def forwardCaptureSettingsChanged(self):
-        self.adapter.capture_settings_changed()
-
     def removeDevice(self):
         p = self.parent()
         assert p is not None, "DeviceConfigWidget must be a child of a parent widget"
         p.layout().removeWidget(self)
         self.deleteLater()
     
-    def removeDeviceIndirection(self):
-        self.adapter.removeDevice()
-
-    def __init__(self):
+    def __init__(self, title: str):
         super().__init__()
+        self.setTitle(title)
         main_layout = QGridLayout(self)
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(0,0,0,0)
@@ -529,11 +514,11 @@ class DeviceConfigWidget(QGroupBox):
 
         self.time_frame_dial = LogKnob("Capture", "s", -13, 1.5)
         self.time_frame_dial.setValue(0.1)
-        self.time_frame_dial.onValueChanged(lambda f: self.forwardCaptureSettingsChanged())
+        self.time_frame_dial.onValueChanged(lambda f: self.trigger_settings_changed_sig.emit())
         self.delay_dial = QuadraticKnob("Delay", "s", 0, 1)
         self.delay_dial.setValue(0.1)
         self.delay_dial.setValue(0)
-        self.delay_dial.onValueChanged(lambda f: self.forwardCaptureSettingsChanged())
+        self.delay_dial.onValueChanged(lambda f: self.trigger_settings_changed_sig.emit())
 
         main_layout.addWidget(self.time_frame_dial, 2, 0, 2, 2)
         main_layout.addWidget(self.delay_dial, 2, 2, 2, 2)
@@ -559,8 +544,15 @@ class DeviceConfigWidget(QGroupBox):
 
         # Stacked mode-specific layout
         self.value_stack = QStackedLayout()
-        self.value_stack.addWidget(AnalogTriggerPanel(self.forwardCaptureSettingsChanged))
-        self.value_stack.addWidget(DigitalTriggerPanel(self.forwardCaptureSettingsChanged))
+
+        analog_trigger_panel = AnalogTriggerPanel()
+        self.value_stack.addWidget(analog_trigger_panel)
+        analog_trigger_panel.settings_changed_sig.connect(self.trigger_settings_changed_sig.emit)
+
+        digital_trigger_panel = DigitalTriggerPanel()
+        self.value_stack.addWidget(digital_trigger_panel)
+        digital_trigger_panel.settings_changed_sig.connect(self.trigger_settings_changed_sig.emit)
+
         stack_container = QWidget()
         stack_container.setLayout(self.value_stack)
         stack_container.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
@@ -569,9 +561,9 @@ class DeviceConfigWidget(QGroupBox):
 
         # Button logic
         self.analog_btn.clicked.connect(lambda: self.value_stack.setCurrentIndex(0))
-        self.analog_btn.clicked.connect(self.forwardCaptureSettingsChanged)
+        self.analog_btn.clicked.connect(self.trigger_settings_changed_sig.emit)
         self.digital_btn.clicked.connect(lambda: self.value_stack.setCurrentIndex(1))
-        self.digital_btn.clicked.connect(self.forwardCaptureSettingsChanged)
+        self.digital_btn.clicked.connect(self.trigger_settings_changed_sig.emit)
 
         waveform_ui = WaveformSelector()
         main_layout.addWidget(waveform_ui, 0, 6, 4, 2)
@@ -590,14 +582,14 @@ class DeviceConfigWidget(QGroupBox):
         self.x1_button.setText("x1")
         self.x1_button.setFixedSize(GRID_SIZE, GRID_SIZE)
         self.x1_button.setCheckable(True)
-        self.x1_button.clicked.connect(self.forwardCaptureSettingsChanged)
+        self.x1_button.clicked.connect(self.trigger_settings_changed_sig.emit)
         main_layout.addWidget(self.x1_button, 0, 8)
 
         self.x10_button = QToolButton()
         self.x10_button.setText("x10")
         self.x10_button.setCheckable(True)
         self.x10_button.setFixedSize(GRID_SIZE, GRID_SIZE)
-        self.x10_button.clicked.connect(self.forwardCaptureSettingsChanged)
+        self.x10_button.clicked.connect(self.trigger_settings_changed_sig.emit)
         main_layout.addWidget(self.x10_button, 1, 8)
 
         buttongroup = QButtonGroup(self)
@@ -622,7 +614,7 @@ class DeviceConfigWidget(QGroupBox):
         delete_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogDiscardButton))
         delete_button.setToolTip("Remove device")
         delete_button.setFixedSize(GRID_SIZE, GRID_SIZE)
-        delete_button.clicked.connect(self.removeDeviceIndirection)
+        delete_button.clicked.connect(self.remove_device_sig.emit)
 
         main_layout.addWidget(delete_button, 0, 10)
 

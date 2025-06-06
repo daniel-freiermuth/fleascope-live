@@ -15,7 +15,7 @@ from pyfleascope.trigger_config import BitState
 from pyfleascope.flea_scope import AnalogTrigger, DigitalTrigger, FleaProbe, FleaScope, Waveform
 
 from toats import ToastManager
-from device_config_ui import DeviceConfigWidget, IFleaScopeAdapter
+from device_config_ui import DeviceConfigWidget
 from fleascope_adapter import FleaScopeAdapter
 
 InputType = TypedDict('InputType', {
@@ -40,8 +40,8 @@ class SidePanel(QtWidgets.QScrollArea):
         self.add_device_button.setEnabled(True)
         self.add_device_button.setChecked(False)
     
-    def add_device_config(self):
-        widget = DeviceConfigWidget()
+    def add_device_config(self, title: str):
+        widget = DeviceConfigWidget(title)
         self.layout.insertWidget(self.layout.count() - 2, widget)
         return widget
 
@@ -99,7 +99,7 @@ class LivePlotApp(QtWidgets.QWidget):
         plot.showGrid(x=True, y=True)
         curve = plot.plot(pen='y')
         self.plots.nextRow()
-        config_widget = self.side_panel.add_device_config()
+        config_widget = self.side_panel.add_device_config(device.hostname)
 
         adapter = FleaScopeAdapter(device, config_widget, self.toast_signal, self.devices)
         adapter.delete_plot.connect(lambda: self.plots.removeItem(plot))
@@ -115,8 +115,9 @@ class LivePlotApp(QtWidgets.QWidget):
         config_widget.cal_0v_sig.connect(lambda: adapter.send_cal_0_signal())
         config_widget.cal_3v3_sig.connect(lambda: adapter.send_cal_3v3_signal())
         config_widget.waveform_changed.connect(lambda waveform, hz: adapter.set_waveform(waveform, hz))
+        config_widget.trigger_settings_changed_sig.connect(lambda: adapter.capture_settings_changed())
+        config_widget.remove_device_sig.connect(lambda: adapter.removeDevice())
 
-        config_widget.set_adapter(adapter)
         self.devices.append(adapter)
 
     def save_snapshot(self):

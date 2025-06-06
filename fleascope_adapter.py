@@ -6,12 +6,12 @@ from typing import Callable, Literal, Self
 
 from PyQt6.QtCore import QObject, QThread, QTimer, pyqtBoundSignal, pyqtSignal, pyqtSlot
 from pandas import Index, Series
-from device_config_ui import DeviceConfigWidget, IFleaScopeAdapter
+from device_config_ui import DeviceConfigWidget
 from pyfleascope.flea_scope import FleaProbe, FleaScope, Waveform
 from toats import ToastManager
 import pyqtgraph as pg
 
-class FleaScopeAdapter(QObject, IFleaScopeAdapter):
+class FleaScopeAdapter(QObject):
     data: pyqtSignal =pyqtSignal(Index, Series)
     delete_plot = pyqtSignal()
     def __init__(self, device: FleaScope, configWidget: DeviceConfigWidget, toast_manager: pyqtBoundSignal, adapter_list: list[Self]):
