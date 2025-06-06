@@ -6,6 +6,7 @@ from PyQt6 import QtWidgets
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QButtonGroup, QDial, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QStackedLayout, QStyle, QToolButton, QVBoxLayout, QWidget
 
+from pyfleascope.flea_scope import Waveform
 from pyfleascope.trigger_config import AnalogTrigger, BitState, BitTriggerBuilder, DigitalTrigger
 
 GRID_SIZE = 30
@@ -222,6 +223,23 @@ class QuadraticKnob(LinearKnob):
         return super()._value_to_step(sqrt_value)
 
 class WaveformSelector(QWidget):
+    waveform_changed = QtCore.pyqtSignal(Waveform, int)
+
+    def emitWaveform(self):
+        hz = int(self.dial.getValue())
+        if self.sine_button.isChecked():
+            waveform = Waveform.SINE
+        elif self.square_button.isChecked():
+            waveform = Waveform.SQUARE
+        elif self.triangle_button.isChecked():
+            waveform = Waveform.TRIANGLE
+        elif self.ekg_button.isChecked():
+            waveform = Waveform.EKG
+        else:
+            raise ValueError("No waveform selected")
+        
+        self.waveform_changed.emit(waveform, hz)
+
     def __init__(self):
         super().__init__()
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
@@ -233,42 +251,44 @@ class WaveformSelector(QWidget):
         trigger_mode_group = QButtonGroup(self)
         trigger_mode_group.setExclusive(True)
 
-        sine_button = QToolButton()
-        sine_button.setText("Si")
+        self.sine_button = QToolButton()
+        self.sine_button.setText("Si")
 
-        square_button = QToolButton()
-        square_button.setText("Sq")
+        self.square_button = QToolButton()
+        self.square_button.setText("Sq")
 
-        triangle_button = QToolButton()
-        triangle_button.setText("️T")
+        self.triangle_button = QToolButton()
+        self.triangle_button.setText("️T")
 
-        ekg_button = QToolButton()
-        ekg_button.setText("E")
+        self.ekg_button = QToolButton()
+        self.ekg_button.setText("E")
 
-        for btn in (sine_button, square_button, triangle_button, ekg_button):
+        for btn in (self.sine_button, self.square_button, self.triangle_button, self.ekg_button):
             btn.setMinimumSize(GRID_SIZE, GRID_SIZE)
             btn.setMaximumSize(GRID_SIZE, GRID_SIZE)
             btn.setCheckable(True)
+            btn.clicked.connect(self.emitWaveform)
             trigger_mode_group.addButton(btn)
         
         row1 = QHBoxLayout()
         row1.setContentsMargins(0, 0, 0, 0)
         row1.setSpacing(0)
-        row1.addWidget(sine_button)
-        row1.addWidget(square_button)
+        row1.addWidget(self.sine_button)
+        row1.addWidget(self.square_button)
 
         row2 = QHBoxLayout()
         row2.setContentsMargins(0, 0, 0, 0)
         row2.setSpacing(0)
-        row2.addWidget(triangle_button)
-        row2.addWidget(ekg_button)
-        sine_button.setChecked(True)
+        row2.addWidget(self.triangle_button)
+        row2.addWidget(self.ekg_button)
+        self.sine_button.setChecked(True)
 
         layout.addLayout(row1)
         layout.addLayout(row2)
 
         self.dial = LinearKnob("Frequency", "Hz", 0.1, 10000)
-        self.dial.setValue(10)
+        self.dial.setValue(1000)
+        self.dial.onValueChanged(lambda f: self.emitWaveform())
 
         layout.addWidget(self.dial)
     
@@ -426,6 +446,8 @@ class DigitalTriggerPanel(TriggerPanel):
     
 
 class DeviceConfigWidget(QGroupBox):
+    cal_0v_sig = QtCore.pyqtSignal()
+    cal_3v3_sig = QtCore.pyqtSignal()
     def set_adapter(self, adapter: IFleaScopeAdapter):
         self.adapter = adapter
         self.setTitle(adapter.getDevicename())
@@ -548,7 +570,9 @@ class DeviceConfigWidget(QGroupBox):
         self.digital_btn.clicked.connect(lambda: self.value_stack.setCurrentIndex(1))
         self.digital_btn.clicked.connect(self.forwardCaptureSettingsChanged)
 
-        main_layout.addWidget(WaveformSelector(), 0, 6, 4, 2)
+        waveform_ui = WaveformSelector()
+        main_layout.addWidget(waveform_ui, 0, 6, 4, 2)
+        self.waveform_changed = waveform_ui.waveform_changed
 
         main_layout.addWidget(DigitalChannelSelectorWidget(), 2, 8, 2, 2)
 
@@ -563,12 +587,14 @@ class DeviceConfigWidget(QGroupBox):
         self.x1_button.setText("x1")
         self.x1_button.setFixedSize(GRID_SIZE, GRID_SIZE)
         self.x1_button.setCheckable(True)
+        self.x1_button.clicked.connect(self.forwardCaptureSettingsChanged)
         main_layout.addWidget(self.x1_button, 0, 8)
 
         self.x10_button = QToolButton()
         self.x10_button.setText("x10")
         self.x10_button.setCheckable(True)
         self.x10_button.setFixedSize(GRID_SIZE, GRID_SIZE)
+        self.x10_button.clicked.connect(self.forwardCaptureSettingsChanged)
         main_layout.addWidget(self.x10_button, 1, 8)
 
         buttongroup = QButtonGroup(self)
@@ -580,11 +606,13 @@ class DeviceConfigWidget(QGroupBox):
         cal_0v = QToolButton()
         cal_0v.setText("0V")
         cal_0v.setFixedSize(GRID_SIZE, GRID_SIZE)
+        cal_0v.clicked.connect(lambda: self.cal_0v_sig.emit())
         main_layout.addWidget(cal_0v, 0, 9)
 
         cal_3v3 = QToolButton()
         cal_3v3.setText("3.3")
         cal_3v3.setFixedSize(GRID_SIZE, GRID_SIZE)
+        cal_3v3.clicked.connect(lambda: self.cal_3v3_sig.emit())
         main_layout.addWidget(cal_3v3, 1, 9)
 
         delete_button = QToolButton()

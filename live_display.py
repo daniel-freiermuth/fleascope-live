@@ -105,6 +105,10 @@ class LivePlotApp(QtWidgets.QWidget):
         adapter.delete_plot.connect(lambda: self.plots.removeItem(plot))
         adapter.data.connect(curve.setData)
 
+        config_widget.cal_0v_sig.connect(adapter.cal_0)
+        config_widget.cal_3v3_sig.connect(adapter.cal_3v3)
+        config_widget.waveform_changed.connect(adapter.set_waveform)
+
         config_widget.set_adapter(adapter)
         self.devices.append(adapter)
 

@@ -4,10 +4,10 @@ import threading
 import time
 from typing import Callable, Literal, Self
 
-from PyQt6.QtCore import QObject, QTimer, pyqtBoundSignal, pyqtSignal
+from PyQt6.QtCore import QObject, QTimer, pyqtBoundSignal, pyqtSignal, pyqtSlot
 from pandas import Index, Series
 from device_config_ui import DeviceConfigWidget, IFleaScopeAdapter
-from pyfleascope.flea_scope import FleaProbe, FleaScope
+from pyfleascope.flea_scope import FleaProbe, FleaScope, Waveform
 from toats import ToastManager
 import pyqtgraph as pg
 
@@ -16,6 +16,11 @@ class FleaScopeAdapter(QObject, IFleaScopeAdapter):
     delete_plot = pyqtSignal()
     def __init__(self, device: FleaScope, configWidget: DeviceConfigWidget, toast_manager: pyqtBoundSignal, adapter_list: list[Self]):
         super().__init__()
+        self.deviceLock  = threading.Lock()
+        self.queuelock = threading.Lock()
+        self.waveformlock = threading.Lock()
+        self.target_waveform: tuple[Waveform, int] | None = None
+        self.commandWaiting = False
         self.configWidget = configWidget
         self.device = device
         self.toast_manager = toast_manager
@@ -35,7 +40,10 @@ class FleaScopeAdapter(QObject, IFleaScopeAdapter):
             if self.state == "paused":
                 time.sleep(0.3)
                 continue
-                
+            if self.commandWaiting:
+                time.sleep(0.1)
+                continue
+            self.deviceLock.acquire()
             scale = self.configWidget.getTimeFrame()
             probe = self.getProbe()
             capture_time = timedelta(seconds=scale)
@@ -43,11 +51,13 @@ class FleaScopeAdapter(QObject, IFleaScopeAdapter):
             try:
                 data = probe.read( capture_time, trigger)
             except:
+                self.deviceLock.release()
                 self.toast_manager.emit(f"Lost connection to {self.device.hostname}", "error")
                 self.removeDevice()
                 break
             if data.size != 0:
                 self.data.emit(data.index, data['bnc'])
+            self.deviceLock.release()
     
     def removeDevice(self):
         logging.debug(f"Removing device {self.device.hostname}")
@@ -75,13 +85,45 @@ class FleaScopeAdapter(QObject, IFleaScopeAdapter):
         else:
             return self.device.x10
     
+    def grabDeviceLock(self):
+        self.queuelock.acquire()
+        self.commandWaiting = True
+        self.capture_settings_changed()
+        self.deviceLock.acquire()
+        self.commandWaiting = False
+        self.queuelock.release()
+    
+    @pyqtSlot()
     def cal_0(self):
+        self.grabDeviceLock()
         self.getProbe().calibrate_0()
+        self.deviceLock.release()
         self.toast_manager.emit("Calibrated to 0V", "success")
 
+    @pyqtSlot()
     def cal_3v3(self):
+        self.grabDeviceLock
         self.getProbe().calibrate_3v3()
+        self.deviceLock.release()
         self.toast_manager.emit("Calibrated to 3.3V", "success")
+
+    @pyqtSlot(Waveform, int)
+    def set_waveform(self, waveform: Waveform, hz: int):
+        logging.debug(f"Setting waveform to {waveform.name} at {hz}Hz")
+        self.waveformlock.acquire()
+        am_I_first_update = self.target_waveform is None
+        self.target_waveform = (waveform, hz)
+        self.toast_manager.emit(f"Setting waveform to {waveform.name} at {hz}Hz", "info")
+        self.waveformlock.release()
+        if not am_I_first_update:
+            return
+        self.grabDeviceLock()
+        self.waveformlock.acquire()
+        waveform, hz = self.target_waveform
+        self.target_waveform = None
+        self.waveformlock.release()
+        self.device.set_waveform(waveform, hz)
+        self.deviceLock.release()
     
     def getDevicename(self) -> str:
         return self.device.hostname
