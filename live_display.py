@@ -5,7 +5,7 @@ import threading
 import time
 from typing import Any, Callable, TypedDict
 from PyQt6 import QtWidgets, QtCore
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import QSizePolicy, QToolButton, QWidget, QGridLayout, QLabel, QComboBox, QColorDialog, QCheckBox, QPushButton, QVBoxLayout
 import pyqtgraph as pg
 import numpy as np
@@ -28,7 +28,6 @@ class SidePanel(QtWidgets.QScrollArea):
     def _add_device(self):
         self.add_device_button.setEnabled(False)
         self.add_device_button.setChecked(True)
-        self.setFixedWidth(360)
         device_name = self.device_name_input.text().strip()
         if device_name:
             try:
@@ -105,9 +104,16 @@ class LivePlotApp(QtWidgets.QWidget):
         adapter.delete_plot.connect(lambda: self.plots.removeItem(plot))
         adapter.data.connect(curve.setData)
 
-        config_widget.cal_0v_sig.connect(adapter.cal_0)
-        config_widget.cal_3v3_sig.connect(adapter.cal_3v3)
-        config_widget.waveform_changed.connect(adapter.set_waveform)
+        workerThread = QThread()
+        adapter.moveToThread(workerThread)
+        workerThread.started.connect(adapter.update_data)
+        workerThread.setObjectName(f"AdapterThread-{hostname}")
+        workerThread.start()
+        self.worker_threads.append(workerThread)
+
+        config_widget.cal_0v_sig.connect(lambda: adapter.send_cal_0_signal())
+        config_widget.cal_3v3_sig.connect(lambda: adapter.send_cal_3v3_signal())
+        config_widget.waveform_changed.connect(lambda waveform, hz: adapter.set_waveform(waveform, hz))
 
         config_widget.set_adapter(adapter)
         self.devices.append(adapter)
@@ -142,6 +148,7 @@ class LivePlotApp(QtWidgets.QWidget):
         layout.addWidget(self.side_panel)
 
         # plot.setXLink(self.plot_list[0])
+        self.worker_threads = []
 
 
 def main():
