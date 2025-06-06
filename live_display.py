@@ -47,6 +47,7 @@ class SidePanel(QtWidgets.QScrollArea):
 
     def __init__(self, toast_manager: ToastManager, add_device: Callable[[FleaScope], None]):
         super().__init__()
+        self.setFixedWidth(360)
         self.setWidgetResizable(True)
         widget = QtWidgets.QWidget()
         self.layout = QtWidgets.QVBoxLayout(widget)
