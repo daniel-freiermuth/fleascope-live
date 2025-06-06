@@ -286,7 +286,7 @@ class WaveformSelector(QWidget):
         layout.addLayout(row1)
         layout.addLayout(row2)
 
-        self.dial = LinearKnob("Frequency", "Hz", 0.1, 10000)
+        self.dial = QuadraticKnob("Frequency", "Hz", 10, 4_000_000)
         self.dial.setValue(1000)
         self.dial.onValueChanged(lambda f: self.emitWaveform())
 
