@@ -4,21 +4,23 @@ import threading
 import time
 from typing import Callable, Literal, Self
 
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QObject, QTimer, pyqtBoundSignal, pyqtSignal
+from pandas import Index, Series
 from device_config_ui import DeviceConfigWidget, IFleaScopeAdapter
 from pyfleascope.flea_scope import FleaProbe, FleaScope
 from toats import ToastManager
 import pyqtgraph as pg
 
-class FleaScopeAdapter(IFleaScopeAdapter):
-    def __init__(self, device: FleaScope, configWidget: DeviceConfigWidget, curve: pg.PlotDataItem, toast_manager: ToastManager, adapter_list: list[Self], delete_plot: Callable[[], None]):
+class FleaScopeAdapter(QObject, IFleaScopeAdapter):
+    data: pyqtSignal =pyqtSignal(Index, Series)
+    delete_plot = pyqtSignal()
+    def __init__(self, device: FleaScope, configWidget: DeviceConfigWidget, toast_manager: pyqtBoundSignal, adapter_list: list[Self]):
+        super().__init__()
         self.configWidget = configWidget
         self.device = device
-        self.curve = curve
         self.toast_manager = toast_manager
         self.state : Literal['running'] | Literal['closing'] | Literal['step'] | Literal['paused'] = "running"
         self.adapter_list = adapter_list
-        self.delete_plot = delete_plot
 
         self.t = threading.Thread(
             target=self.update_data, daemon=True
@@ -38,16 +40,21 @@ class FleaScopeAdapter(IFleaScopeAdapter):
             probe = self.getProbe()
             capture_time = timedelta(seconds=scale)
             trigger = self.configWidget.getTrigger()
-            data = probe.read( capture_time, trigger)
+            try:
+                data = probe.read( capture_time, trigger)
+            except:
+                self.toast_manager.emit(f"Lost connection to {self.device.hostname}", "error")
+                self.removeDevice()
+                break
             if data.size != 0:
-                self.curve.setData(data.index, data['bnc'])
+                self.data.emit(data.index, data['bnc'])
     
     def removeDevice(self):
         logging.debug(f"Removing device {self.device.hostname}")
         self.state = "closing"
         self.configWidget.removeDevice()
         self.adapter_list.remove(self)
-        self.delete_plot()
+        self.delete_plot.emit()
     
     def pause(self):
         if not self.is_closing():
@@ -70,11 +77,11 @@ class FleaScopeAdapter(IFleaScopeAdapter):
     
     def cal_0(self):
         self.getProbe().calibrate_0()
-        self.toast_manager.show("Calibrated to 0V", level="success")
+        self.toast_manager.emit("Calibrated to 0V", "success")
 
     def cal_3v3(self):
         self.getProbe().calibrate_3v3()
-        self.toast_manager.show("Calibrated to 3.3V", level="success")
+        self.toast_manager.emit("Calibrated to 3.3V", "success")
     
     def getDevicename(self) -> str:
         return self.device.hostname

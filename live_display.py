@@ -5,6 +5,7 @@ import threading
 import time
 from typing import Any, Callable, TypedDict
 from PyQt6 import QtWidgets, QtCore
+from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QSizePolicy, QToolButton, QWidget, QGridLayout, QLabel, QComboBox, QColorDialog, QCheckBox, QPushButton, QVBoxLayout
 import pyqtgraph as pg
 import numpy as np
@@ -69,6 +70,7 @@ class SidePanel(QtWidgets.QScrollArea):
 
 class LivePlotApp(QtWidgets.QWidget):
     closing = False
+    toast_signal = pyqtSignal(str, str)
     def shutdown(self):
         self.closing = True
         for input in self.inputs:
@@ -98,8 +100,11 @@ class LivePlotApp(QtWidgets.QWidget):
         curve = plot.plot(pen='y')
         self.plots.nextRow()
         config_widget = self.side_panel.add_device_config()
-        adapter = FleaScopeAdapter(device, config_widget, curve, self.toast_manager, self.devices,
-                                   lambda: self.plots.removeItem(plot))
+
+        adapter = FleaScopeAdapter(device, config_widget, self.toast_signal, self.devices)
+        adapter.delete_plot.connect(lambda: self.plots.removeItem(plot))
+        adapter.data.connect(curve.setData)
+
         config_widget.set_adapter(adapter)
         self.devices.append(adapter)
 
@@ -117,6 +122,7 @@ class LivePlotApp(QtWidgets.QWidget):
     
     def __init__(self):
         super().__init__()
+        self.toast_signal.connect(lambda msg, level: self.toast_manager.show(msg, level=level))
         self.toast_manager = ToastManager(self)
         self.devices: list[FleaScopeAdapter] = []
 
