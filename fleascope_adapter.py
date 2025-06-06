@@ -36,8 +36,9 @@ class FleaScopeAdapter(QObject, IFleaScopeAdapter):
             probe = self.getProbe()
             capture_time = timedelta(seconds=scale)
             trigger = self.configWidget.getTrigger()
+            delay = timedelta(seconds=self.configWidget.getDelayValue())
             try:
-                data = probe.read( capture_time, trigger)
+                data = probe.read( capture_time, trigger, delay)
                 if data.size != 0:
                     self.data.emit(data.index, data['bnc'])
             except Exception as e:

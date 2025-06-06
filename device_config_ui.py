@@ -465,6 +465,9 @@ class DeviceConfigWidget(QGroupBox):
     
     def getTrigger(self) -> AnalogTrigger | DigitalTrigger:
         return self.value_stack.currentWidget().getTrigger()
+
+    def getDelayValue(self) -> float:
+        return self.delay_dial.getValue()
     
     def forwardCaptureSettingsChanged(self):
         self.adapter.capture_settings_changed()
@@ -527,13 +530,13 @@ class DeviceConfigWidget(QGroupBox):
         self.time_frame_dial = LogKnob("Capture", "s", -13, 1.5)
         self.time_frame_dial.setValue(0.1)
         self.time_frame_dial.onValueChanged(lambda f: self.forwardCaptureSettingsChanged())
-        delay_dial = QuadraticKnob("Delay", "s", 0, 1)
-        delay_dial.setValue(0.1)
-        delay_dial.setValue(0)
-        delay_dial.onValueChanged(lambda f: self.forwardCaptureSettingsChanged())
+        self.delay_dial = QuadraticKnob("Delay", "s", 0, 1)
+        self.delay_dial.setValue(0.1)
+        self.delay_dial.setValue(0)
+        self.delay_dial.onValueChanged(lambda f: self.forwardCaptureSettingsChanged())
 
         main_layout.addWidget(self.time_frame_dial, 2, 0, 2, 2)
-        main_layout.addWidget(delay_dial, 2, 2, 2, 2)
+        main_layout.addWidget(self.delay_dial, 2, 2, 2, 2)
 
         # Trigger mode selector (Analog / Digital)
         self.analog_btn = QPushButton("A")
