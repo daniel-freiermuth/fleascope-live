@@ -601,13 +601,13 @@ class DeviceConfigWidget(QGroupBox):
         cal_0v = QToolButton()
         cal_0v.setText("0V")
         cal_0v.setFixedSize(GRID_SIZE, GRID_SIZE)
-        cal_0v.clicked.connect(lambda: self.cal_0v_sig.emit())
+        cal_0v.clicked.connect(self.cal_0v_sig.emit)
         main_layout.addWidget(cal_0v, 0, 9)
 
         cal_3v3 = QToolButton()
         cal_3v3.setText("3.3")
         cal_3v3.setFixedSize(GRID_SIZE, GRID_SIZE)
-        cal_3v3.clicked.connect(lambda: self.cal_3v3_sig.emit())
+        cal_3v3.clicked.connect(self.cal_3v3_sig.emit)
         main_layout.addWidget(cal_3v3, 1, 9)
 
         delete_button = QToolButton()
