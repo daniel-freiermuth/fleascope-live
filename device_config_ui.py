@@ -183,34 +183,58 @@ class LinearKnob(Knob):
         self._lower_limit = lower_limit
         self._upper_limit = upper_limit
 
-class LogKnob(Knob):
-    def __init__(self, title: str, unit: str, min_exp: float, max_exp: float, steps: int=1321):
-        super().__init__(title, unit, steps)
-        self._min_exp = min_exp
-        self._max_exp = max_exp
-
-    def _step_to_value(self, step: int) -> float:
-        return 2** (step / self._dial.maximum() * (self._max_exp - self._min_exp) + self._min_exp)
-
-    def _value_to_step(self, value: float) -> int:
-        return int((math.log(value, 2) - self._min_exp) / (self._max_exp - self._min_exp) * self._dial.maximum())
+class MonotonicKnob(LinearKnob):
+    def __init__(self, title: str, unit: str,
+                 lower_limit: float, upper_limit: float,
+                 steps: int=1321):
+        super().__init__(title, unit, self._value_to_linear(lower_limit), self._value_to_linear(upper_limit), steps)
     
-class QuadraticKnob(LinearKnob):
-    def __init__(self, title: str, unit: str, lower_limit: float, upper_limit: float, steps: int=1321):
-        self._lower_is_negative = lower_limit < 0
-        self._upper_is_negative = upper_limit < 0
-
-        sqrt_lower = math.sqrt(abs(lower_limit)) * (-1 if self._lower_is_negative else 1)
-        sqrt_upper = math.sqrt(abs(upper_limit)) * (-1 if self._upper_is_negative else 1)
-        super().__init__(title, unit, sqrt_lower, sqrt_upper, steps)
-
+    def _value_to_linear(self, value: float) -> float:
+        return NotImplemented
+    
+    def _linear_to_value(self, linear_value: float) -> float:
+        return NotImplemented
+    
     def _step_to_value(self, step: int) -> float:
-        v = super()._step_to_value(step)
-        return v**2 if v >= 0 else -(v**2)
+        linear_value = super()._step_to_value(step)
+        return self._linear_to_value(linear_value)
 
     def _value_to_step(self, value: float) -> int:
-        sqrt_value = math.sqrt(abs(value)) * (-1 if value < 0 else 1)
-        return super()._value_to_step(sqrt_value)
+        linear_value = self._value_to_linear(value)
+        return super()._value_to_step(linear_value)
+
+    def setLimits(self, lower_limit: float, upper_limit: float):
+        cur_value = self.getValue()
+        self._lower_limit = self._value_to_linear(lower_limit)
+        self._upper_limit = self._value_to_linear(upper_limit)
+        value = min(max(cur_value, lower_limit), upper_limit)
+        self.setValue(value)
+
+class LogKnob(LinearKnob):
+    def __init__(self, title: str, unit: str, min_exp: float, max_exp: float, steps: int=1321):
+        super().__init__(title, unit, min_exp, max_exp, steps)
+
+    def _step_to_value(self, step: int) -> float:
+        return 2** (super()._step_to_value(step))
+
+    def _value_to_step(self, value: float) -> int:
+        return super()._value_to_step(math.log(value, 2))
+    
+class QuadraticKnob(MonotonicKnob):
+    def __init__(self, title: str, unit: str, lower_limit: float, upper_limit: float, steps: int=1321):
+        super().__init__(title, unit, lower_limit, upper_limit, steps)
+    
+    def _value_to_linear(self, value: float) -> float:
+        if value >= 0:
+            return math.sqrt(value)
+        else:
+            return -math.sqrt(-value)
+    
+    def _linear_to_value(self, linear_value: float) -> float:
+        if linear_value >= 0:
+            return linear_value**2
+        else:
+            return -(linear_value**2)
 
 class WaveformSelector(QWidget):
     waveform_changed = QtCore.pyqtSignal(Waveform, int)
@@ -519,6 +543,7 @@ class DeviceConfigWidget(QGroupBox):
         self.delay_dial.setValue(0.1)
         self.delay_dial.setValue(0)
         self.delay_dial.onValueChanged(lambda f: self.trigger_settings_changed_sig.emit())
+        self.time_frame_dial.onValueChanged(lambda time: self.delay_dial.setLimits(0, time*400))
 
         main_layout.addWidget(self.time_frame_dial, 2, 0, 2, 2)
         main_layout.addWidget(self.delay_dial, 2, 2, 2, 2)
