@@ -1,18 +1,12 @@
-from datetime import timedelta
 import math
 import signal
-import threading
-import time
-from typing import Any, Callable, TypedDict
-from PyQt6 import QtWidgets, QtCore
+from typing import TypedDict
+from PyQt6 import QtWidgets
 from PyQt6.QtCore import QThread, pyqtSignal
-from PyQt6.QtWidgets import QSizePolicy, QToolButton, QWidget, QGridLayout, QLabel, QComboBox, QColorDialog, QCheckBox, QPushButton, QVBoxLayout
 import pyqtgraph as pg
-import numpy as np
 import sys
 
-from pyfleascope.trigger_config import BitState
-from pyfleascope.flea_scope import AnalogTrigger, DigitalTrigger, FleaProbe, FleaScope, Waveform
+from pyfleascope.flea_scope import AnalogTrigger, DigitalTrigger, FleaScope
 
 from toats import ToastManager
 from device_config_ui import DeviceConfigWidget
