@@ -1,5 +1,6 @@
 import math
 import signal
+from collections.abc import Callable
 from typing import TypedDict
 from PyQt6 import QtWidgets
 from PyQt6.QtCore import QThread, pyqtSignal
@@ -8,9 +9,9 @@ import sys
 
 from pyfleascope.flea_scope import AnalogTrigger, DigitalTrigger, FleaScope
 
-from toats import ToastManager
-from device_config_ui import DeviceConfigWidget
-from fleascope_adapter import FleaScopeAdapter
+from fleascope_live_display.toats import ToastManager
+from fleascope_live_display.device_config_ui import DeviceConfigWidget
+from fleascope_live_display.fleascope_adapter import FleaScopeAdapter
 
 InputType = TypedDict('InputType', {
     'device': FleaScope,

@@ -5,11 +5,16 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fleascope-live-display"
-version = "0.0.1"
+version = "0.0.9"
 authors = [
   { name="D. Freiermuth", email="author@example.com" },
 ]
 description = "Oscilloscope frontend for FleaScope"
+dependencies = [
+    "pyqt6",
+    "pyfleascope",
+    "pyqtgraph",
+]
 readme = "README.md"
 requires-python = ">=3.9"
 classifiers = [
@@ -22,3 +27,7 @@ license-files = ["LICEN[CS]E*"]
 [project.urls]
 Homepage = "https://github.com/daniel-freiermuth/fleascope-live"
 Issues = "https://github.com/daniel-freiermuth/fleascope-live/issues"
+
+
+[project.scripts]
+fleascope-live-display = "fleascope_live_display.live_display:main"
