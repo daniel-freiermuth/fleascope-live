@@ -9,7 +9,7 @@ import sys
 
 from pyfleascope.flea_scope import AnalogTrigger, DigitalTrigger, FleaScope
 
-from fleascope_live_display.toats import ToastManager
+from fleascope_live_display.toasts import ToastManager
 from fleascope_live_display.device_config_ui import DeviceConfigWidget
 from fleascope_live_display.fleascope_adapter import FleaScopeAdapter
 
