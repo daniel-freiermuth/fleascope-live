@@ -64,12 +64,10 @@ class SidePanel(QtWidgets.QScrollArea):
         self.layout.addLayout(add_row)
 
 class LivePlotApp(QtWidgets.QWidget):
-    closing = False
     toast_signal = pyqtSignal(str, str)
     def shutdown(self):
-        self.closing = True
-        for input in self.inputs:
-            input['device'].unblock()
+        for adapter in self.devices:
+            adapter.shutdown()
 
     def pretty_prefix(self, x: float):
         """Give the number an appropriate SI prefix.
