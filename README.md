@@ -4,16 +4,18 @@ A simple Qt application that turns your computer into an oscilloscope using Flea
 
 ![Screenshot](./screenshot.png)
 
-## Usage
+## Installation
 
-Install all necessary requirements
+Easiest is to install via pipx
 
 ```bash
-pip -r requirements.txt
+pipx install fleascope-live-display
 ```
+
+## Usage
 
 Run the application
 
 ```bash
-python live_display.py
+fleascope-live-display
 ```

@@ -1,3 +1,0 @@
-pyfleascope
-pyqt6
-pyqtgraph
