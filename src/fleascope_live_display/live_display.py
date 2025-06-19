@@ -3,11 +3,12 @@ import signal
 from collections.abc import Callable
 from typing import TypedDict
 from PyQt6 import QtWidgets
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtWidgets import QStyle
 import pyqtgraph as pg
 import sys
 
-from pyfleascope.flea_scope import AnalogTrigger, DigitalTrigger, FleaScope
+from pyfleascope.flea_scope import AnalogTrigger, DigitalTrigger, FleaScope, FleaConnector
 
 from fleascope_live_display.toasts import ToastManager
 from fleascope_live_display.device_config_ui import DeviceConfigWidget
@@ -18,18 +19,24 @@ InputType = TypedDict('InputType', {
     'trigger': AnalogTrigger | DigitalTrigger
 })
 
+class AvailableDevicesWorker(QObject):
+    finished = pyqtSignal(list)
+
+    def run(self):
+        values = [d.name for d in FleaConnector.get_available_devices()]
+        self.finished.emit(values)
+
+
 class SidePanel(QtWidgets.QScrollArea):
     # QScrollArea -> QWidget -> QVBoxLayout
     def _add_device(self):
         self.add_device_button.setEnabled(False)
         self.add_device_button.setChecked(True)
-        device_name = self.device_name_input.text().strip()
+        device_name = self.device_name_input.currentText().strip()
         if device_name:
             try:
-                device = FleaScope.connect(device_name)
-                self.toast_manager.show(f"Connected to {device_name}", level="success")
-                self.device_name_input.clear()
-                self.newDeviceCallback(device)
+                self.newDeviceCallback(device_name)
+                self.device_name_input.removeItem(self.device_name_input.currentIndex())
             except Exception as e:
                 self.toast_manager.show(f"Failed to connect to {device_name}: {e}", level="error")
         self.add_device_button.setEnabled(True)
@@ -40,7 +47,7 @@ class SidePanel(QtWidgets.QScrollArea):
         self.layout.insertWidget(self.layout.count() - 2, widget)
         return widget
 
-    def __init__(self, toast_manager: ToastManager, add_device: Callable[[FleaScope], None]):
+    def __init__(self, toast_manager: ToastManager, add_device: Callable[[str], None]):
         super().__init__()
         self.setFixedWidth(360)
         self.setWidgetResizable(True)
@@ -53,15 +60,46 @@ class SidePanel(QtWidgets.QScrollArea):
 
         # === Device name input + add button ===
         add_row = QtWidgets.QHBoxLayout()
-        self.device_name_input = QtWidgets.QLineEdit()
+        self.device_name_input = QtWidgets.QComboBox()
+        self.device_name_input.setEditable(True)
         self.device_name_input.setPlaceholderText("Device name")
+
+        self.button = QtWidgets.QToolButton()
+        self.button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
+        self.button.clicked.connect(self.load_items)
+
         self.add_device_button = QtWidgets.QPushButton("+ Add Device")
         self.add_device_button.clicked.connect(self._add_device)
+
         add_row.addWidget(self.device_name_input)
+        add_row.addWidget(self.button)
         add_row.addWidget(self.add_device_button)
+        self.load_items()
 
         self.layout.addStretch()
         self.layout.addLayout(add_row)
+
+    def load_items(self):
+        self.button.setEnabled(False)
+
+        self.thread = QThread()
+        self.worker = AvailableDevicesWorker()
+        self.worker.moveToThread(self.thread)
+
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.populate_combo)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+
+        self.thread.start()
+
+    def populate_combo(self, items):
+        self.device_name_input.clear()
+        self.device_name_input.addItems(items)
+        self.device_name_input.setCurrentIndex(0)
+        self.button.setEnabled(True)
+
 
 class LivePlotApp(QtWidgets.QWidget):
     toast_signal = pyqtSignal(str, str)
@@ -83,11 +121,12 @@ class LivePlotApp(QtWidgets.QWidget):
         div, mod = divmod(l, 3)
         return "%.3g %s" % (x * 10**(-l + mod), " kMGTPEZYyzafpnµm"[div])
     
-    def add_device(self, device: FleaScope):
-        hostname = device.hostname
+    def add_device(self, hostname: str):
         if any(filter(lambda d: d.getDevicename() == hostname, self.devices)):
             self.toast_manager.show(f"Device {hostname} already added", level="warning")
             return
+        device = FleaScope.connect(hostname)
+        self.toast_manager.show(f"Connected to {hostname}", level="success")
         plot: pg.PlotItem = self.plots.addPlot(title=f"Signal {hostname}")
         plot.showGrid(x=True, y=True)
         curve = plot.plot(pen='y')
