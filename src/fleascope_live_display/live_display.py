@@ -153,6 +153,7 @@ class LivePlotApp(QtWidgets.QWidget):
         config_widget.pause_sig.connect(lambda: adapter.pause())
         config_widget.resume_sig.connect(adapter.resume)
         config_widget.step_sig.connect(adapter.step)
+        config_widget.rename_device_sig.connect(adapter.set_hostname)
 
         self.devices.append(adapter)
 

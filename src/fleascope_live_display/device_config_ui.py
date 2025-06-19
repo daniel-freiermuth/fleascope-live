@@ -5,7 +5,7 @@ from typing import Literal
 from PyQt6 import QtCore
 from PyQt6 import QtWidgets
 from PyQt6.QtGui import QColor
-from PyQt6.QtWidgets import QButtonGroup, QDial, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QStackedLayout, QStyle, QToolButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QButtonGroup, QDial, QGridLayout, QGroupBox, QHBoxLayout, QInputDialog, QLabel, QPushButton, QSizePolicy, QStackedLayout, QStyle, QToolButton, QVBoxLayout, QWidget
 
 from pyfleascope.flea_scope import Waveform
 from pyfleascope.trigger_config import AnalogTrigger, BitState, BitTriggerBuilder, DigitalTrigger
@@ -470,6 +470,7 @@ class DeviceConfigWidget(QGroupBox):
     pause_sig = QtCore.pyqtSignal()
     resume_sig = QtCore.pyqtSignal()
     step_sig = QtCore.pyqtSignal()
+    rename_device_sig = QtCore.pyqtSignal(str)
 
     def set_transportview(self, name: Literal['paused', 'running']):
         if name == 'paused':
@@ -501,6 +502,12 @@ class DeviceConfigWidget(QGroupBox):
         assert p is not None, "DeviceConfigWidget must be a child of a parent widget"
         p.layout().removeWidget(self)
         self.deleteLater()
+
+    def offerRenameDevice(self):
+        text, ok = QInputDialog.getText(self, "Input new device name", "Name:")
+        if ok:
+            self.setTitle(text)
+            self.rename_device_sig.emit(text)
     
     def __init__(self, title: str):
         super().__init__()
@@ -516,6 +523,7 @@ class DeviceConfigWidget(QGroupBox):
         rename_button = QToolButton()
         rename_button.setText("R")
         rename_button.setFixedSize(GRID_SIZE, GRID_SIZE)
+        rename_button.clicked.connect(self.offerRenameDevice)
         main_layout.addWidget(rename_button, 1, 0)
 
         self.transport_control = QStackedLayout()

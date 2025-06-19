@@ -103,6 +103,12 @@ class FleaScopeAdapter(QObject):
         QTimer.singleShot(0, self.cal_0)
         self.device.unblock()
     
+    @pyqtSlot(str)
+    def set_hostname(self, hostname: str):
+        logging.debug(f"Setting hostname for {self.device.hostname} to {hostname} as {QThread.currentThread().objectName()}")
+        self.device.set_hostname(hostname)
+        self.toast_manager.emit(f"Hostname set to {hostname}", "success")
+    
     @pyqtSlot()
     def cal_0(self):
         logging.debug(f"Calibrating to 0V for {self.device.hostname} as {QThread.currentThread().objectName()}")
