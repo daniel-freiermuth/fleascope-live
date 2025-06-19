@@ -466,7 +466,7 @@ class DeviceConfigWidget(QGroupBox):
     remove_device_sig = QtCore.pyqtSignal()
     trigger_settings_changed_sig = QtCore.pyqtSignal()
 
-    def getProble(self) -> str:
+    def getProbe(self) -> str:
         if self.x1_button.isChecked():
             return "x1"
         elif self.x10_button.isChecked():

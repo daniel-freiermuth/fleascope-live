@@ -66,7 +66,7 @@ class FleaScopeAdapter(QObject):
         self.device.unblock()
     
     def getProbe(self) -> FleaProbe:
-        if self.configWidget.getProble() == "x1":
+        if self.configWidget.getProbe() == "x1":
             return self.device.x1
         else:
             return self.device.x10
