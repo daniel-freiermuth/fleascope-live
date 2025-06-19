@@ -5,7 +5,8 @@ from typing import Literal, Self
 
 from PyQt6.QtCore import QObject, QThread, QTimer, pyqtBoundSignal, pyqtSignal, pyqtSlot
 from pandas import Index, Series
-from fleascope_live_display.device_config_ui import DeviceConfigWidget
+from serial import SerialException
+from .device_config_ui import DeviceConfigWidget
 from pyfleascope.flea_scope import FleaProbe, FleaScope, Waveform
 
 class FleaScopeAdapter(QObject):
@@ -18,32 +19,58 @@ class FleaScopeAdapter(QObject):
         self.configWidget = configWidget
         self.device = device
         self.toast_manager = toast_manager
-        self.state : Literal['running'] | Literal['closing'] | Literal['step'] | Literal['paused'] = "running"
+        self.state : Literal['running'] | Literal['closing'] | Literal['paused'] = "running"
         self.adapter_list = adapter_list
         self.calibration_pending = False
 
     def is_closing(self) -> bool:
         return self.state == "closing"
 
-    def update_data(self):
-        if self.state == "paused":
-            QTimer.msleep(300)
-        else:
-            scale = self.configWidget.getTimeFrame()
-            probe = self.getProbe()
-            capture_time = timedelta(seconds=scale)
-            trigger = self.configWidget.getTrigger()
-            delay = timedelta(seconds=self.configWidget.getDelayValue())
-            try:
-                data = probe.read( capture_time, trigger, delay)
-                if data.size != 0:
-                    self.data.emit(data.index, data['bnc'])
-            except Exception as e:
-                self.toast_manager.emit(f"Lost connection to {self.device.hostname}", "error")
-                self.removeDevice()
-                raise e
+    def step(self):
+        logging.debug(f"Stepping data update for {self.device.hostname} as {QThread.currentThread().objectName()}")
         if not self.is_closing():
+            self.configWidget.set_transportview('running')
             QTimer.singleShot(0, self.update_data)
+
+    def resume(self):
+        logging.debug(f"Starting data update thread for {self.device.hostname} as {QThread.currentThread().objectName()}")
+        if not self.is_closing():
+            self.configWidget.set_transportview('running')
+            self.state = "running"
+            QTimer.singleShot(0, self.update_data)
+
+    @pyqtSlot()
+    def update_data(self):
+        scale = self.configWidget.getTimeFrame()
+        probe = self.getProbe()
+        capture_time = timedelta(seconds=scale)
+        trigger = self.configWidget.getTrigger()
+        delay = timedelta(seconds=self.configWidget.getDelayValue())
+        try:
+            data = probe.read( capture_time, trigger, delay)
+            if data.size != 0:
+                self.data.emit(data.index, data['bnc'])
+        except SerialException as e:
+            # SerialException -> Stale
+            logging.error(f"SerialException while reading data from {self.device.hostname}: {e}")
+            self.toast_manager.emit(f"Lost connection to {self.device.hostname}", "error")
+            self.state = "closing"
+            raise e
+        except ValueError as e:
+            # ValueError -> Pause
+            logging.error(f"ValueError while reading data from {self.device.hostname}: {e}")
+            self.toast_manager.emit(f"Error reading data from {self.device.hostname}: {e}", "error")
+            self.state = "paused"
+        except Exception as e:
+            logging.error(f"Unexpected error while reading data from {self.device.hostname}: {e}")
+            self.toast_manager.emit(f"Unexpected error reading data from {self.device.hostname}: {e}", "error")
+            self.state = "paused"
+            raise e
+        if self.state == "running":
+            QTimer.singleShot(0, self.update_data)
+        else:
+            self.configWidget.set_transportview('paused')
+
     
     def removeDevice(self):
         logging.debug(f"Removing device {self.device.hostname} as {QThread.currentThread().objectName()}")
@@ -56,10 +83,6 @@ class FleaScopeAdapter(QObject):
         if not self.is_closing():
             self.state = "paused"
             self.device.unblock()
-
-    def start(self):
-        if not self.is_closing():
-            self.state = "running"
 
     def capture_settings_changed(self):
         logging.debug("Capture settings changed, restarting data update thread")

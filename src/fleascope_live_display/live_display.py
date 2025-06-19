@@ -150,6 +150,9 @@ class LivePlotApp(QtWidgets.QWidget):
         config_widget.trigger_settings_changed_sig.connect(lambda: adapter.capture_settings_changed())
         config_widget.remove_device_sig.connect(lambda: adapter.removeDevice())
         config_widget.save_cal_sig.connect(adapter.storeCalibration)
+        config_widget.pause_sig.connect(lambda: adapter.pause())
+        config_widget.resume_sig.connect(adapter.resume)
+        config_widget.step_sig.connect(adapter.step)
 
         self.devices.append(adapter)
 

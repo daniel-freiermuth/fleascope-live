@@ -1,6 +1,7 @@
 from abc import abstractmethod
 import math
 from collections.abc import Callable
+from typing import Literal
 from PyQt6 import QtCore
 from PyQt6 import QtWidgets
 from PyQt6.QtGui import QColor
@@ -466,8 +467,19 @@ class DeviceConfigWidget(QGroupBox):
     cal_3v3_sig = QtCore.pyqtSignal()
     remove_device_sig = QtCore.pyqtSignal()
     trigger_settings_changed_sig = QtCore.pyqtSignal()
+    pause_sig = QtCore.pyqtSignal()
+    resume_sig = QtCore.pyqtSignal()
+    step_sig = QtCore.pyqtSignal()
 
-    def getProbe(self) -> str:
+    def set_transportview(self, name: Literal['paused', 'running']):
+        if name == 'paused':
+            self.transport_control.setCurrentIndex(0)
+        elif name == 'running':
+            self.transport_control.setCurrentIndex(1)
+        else:
+            raise ValueError("Invalid transport view name. Use 'paused' or 'running'.")
+
+    def getProbe(self):
         if self.x1_button.isChecked():
             return "x1"
         elif self.x10_button.isChecked():
@@ -506,7 +518,7 @@ class DeviceConfigWidget(QGroupBox):
         rename_button.setFixedSize(GRID_SIZE, GRID_SIZE)
         main_layout.addWidget(rename_button, 1, 0)
 
-        transport_control = QStackedLayout()
+        self.transport_control = QStackedLayout()
         controls_when_paused_l = QHBoxLayout()
         controls_when_paused_l.setContentsMargins(0, 0, 0, 0)
         controls_when_paused_l.setSpacing(0)
@@ -518,24 +530,27 @@ class DeviceConfigWidget(QGroupBox):
         play_button.setToolTip("Continously sample")
         play_button.setFixedSize(GRID_SIZE, GRID_SIZE)
         controls_when_paused_l.addWidget(play_button)
+        play_button.clicked.connect(self.resume_sig)
 
         step_button = QToolButton()
         step_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSkipForward))
         step_button.setToolTip("Capture one sample")
         step_button.setFixedSize(GRID_SIZE, GRID_SIZE)
         controls_when_paused_l.addWidget(step_button)
+        step_button.clicked.connect(self.step_sig)
 
         pause_button = QToolButton()
         pause_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
         pause_button.setToolTip("Pause sampling")
         pause_button.setFixedSize(2*GRID_SIZE, GRID_SIZE)
+        pause_button.clicked.connect(self.pause_sig)
 
-        transport_control.addWidget(controls_when_paused_w)
-        transport_control.addWidget(pause_button)
+        self.transport_control.addWidget(controls_when_paused_w)
+        self.transport_control.addWidget(pause_button)
 
-        transport_control.setCurrentIndex(1)
+        self.transport_control.setCurrentIndex(1)
 
-        main_layout.addLayout(transport_control, 0, 1, 1, 2)
+        main_layout.addLayout(self.transport_control, 0, 1, 1, 2)
 
         self.time_frame_dial = LogKnob("Capture", "s", -13, 1.5)
         self.time_frame_dial.setValue(0.1)
