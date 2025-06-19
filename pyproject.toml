@@ -5,14 +5,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fleascope-live-display"
-version = "0.0.9"
+version = "0.0.10"
 authors = [
   { name="D. Freiermuth", email="author@example.com" },
 ]
 description = "Oscilloscope frontend for FleaScope"
 dependencies = [
     "pyqt6",
-    "pyfleascope",
+    "pyfleascope>=0.1.0",
     "pyqtgraph",
 ]
 readme = "README.md"

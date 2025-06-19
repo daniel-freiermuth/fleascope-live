@@ -170,7 +170,7 @@ class FleaScopeAdapter(QObject):
     
     def getDevicename(self) -> str:
         return self.device.hostname
-    
+
     def shutdown(self):
         self.state = "closing"
         self.device.unblock()

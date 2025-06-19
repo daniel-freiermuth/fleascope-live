@@ -10,9 +10,9 @@ import sys
 
 from pyfleascope.flea_scope import AnalogTrigger, DigitalTrigger, FleaScope, FleaConnector
 
-from fleascope_live_display.toasts import ToastManager
-from fleascope_live_display.device_config_ui import DeviceConfigWidget
-from fleascope_live_display.fleascope_adapter import FleaScopeAdapter
+from .toasts import ToastManager
+from .device_config_ui import DeviceConfigWidget
+from .fleascope_adapter import FleaScopeAdapter
 
 InputType = TypedDict('InputType', {
     'device': FleaScope,
