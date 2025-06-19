@@ -462,6 +462,7 @@ class DigitalTriggerPanel(TriggerPanel):
 
 class DeviceConfigWidget(QGroupBox):
     cal_0v_sig = QtCore.pyqtSignal()
+    save_cal_sig = QtCore.pyqtSignal()
     cal_3v3_sig = QtCore.pyqtSignal()
     remove_device_sig = QtCore.pyqtSignal()
     trigger_settings_changed_sig = QtCore.pyqtSignal()
@@ -649,6 +650,7 @@ class DeviceConfigWidget(QGroupBox):
         save.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton))
         save.setToolTip("Save calibration")
         save.setFixedSize(GRID_SIZE, GRID_SIZE)
+        save.clicked.connect(self.save_cal_sig)
 
         main_layout.addWidget(save, 2, 10)
 

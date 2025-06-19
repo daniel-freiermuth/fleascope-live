@@ -110,6 +110,16 @@ class FleaScopeAdapter(QObject):
             self.toast_manager.emit("Calibrated to 3.3V", "success")
         except ValueError:
             self.toast_manager.emit("Signal too unstable for calibration", "failure")
+        
+    @pyqtSlot()
+    def storeCalibration(self):
+        logging.debug(f"Storing calibration for {self.device.hostname} as {QThread.currentThread().objectName()}")
+        try:
+            self.device.x1.write_calibration_to_flash()
+            self.device.x10.write_calibration_to_flash()
+            self.toast_manager.emit("Calibration stored", "success")
+        except ValueError:
+            self.toast_manager.emit("Failed to store calibration", "failure")
 
     def set_waveform(self, waveform: Waveform, hz: int):
         logging.debug(f"Sending signal waveform to {waveform.name} at {hz}Hz as {QThread.currentThread().objectName()}")

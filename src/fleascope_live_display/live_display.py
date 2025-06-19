@@ -149,6 +149,7 @@ class LivePlotApp(QtWidgets.QWidget):
         config_widget.waveform_changed.connect(lambda waveform, hz: adapter.set_waveform(waveform, hz))
         config_widget.trigger_settings_changed_sig.connect(lambda: adapter.capture_settings_changed())
         config_widget.remove_device_sig.connect(lambda: adapter.removeDevice())
+        config_widget.save_cal_sig.connect(adapter.storeCalibration)
 
         self.devices.append(adapter)
 
